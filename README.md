@@ -67,18 +67,78 @@ unforgeable even over plain HTTP — only the random nonces are visible on the w
 See [`server/README.md`](server/README.md) and [`client/README.md`](client/README.md)
 for building and deploying, and [`docs/`](docs/) for the PBS-side setup.
 
-## Deployment
+## Installation
 
-The server is published as a multi-arch Docker image that runs on **x86_64,
-arm64 and armv7** (including Raspberry Pi 3/4/5):
+### 1. Shared secret (both sides)
 
-    docker pull ghcr.io/ftaeger/pbs-sync-auth:latest
+Generate the 32-byte secret **once** and copy the same file to both the server and
+the source PBS:
 
-Deploy it as a container, behind Traefik for TLS, or as a standalone binary +
-systemd — see [`server/README.md`](server/README.md). A complete Traefik +
-Let's Encrypt example (HTTP-01 or Cloudflare DNS-01) is in
-[`examples/traefik/`](examples/traefik/). Prebuilt binaries for each release are
-on the [releases page](https://github.com/ftaeger/pbs-sync-auth/releases).
+    openssl rand -hex 32 > secret.key    # keep it safe, never commit it
+
+### 2. Server (auth host) — Docker
+
+Run the published multi-arch image (x86_64 / arm64 / armv7, incl. Raspberry Pi
+3/4/5) on a host the source PBS can reach:
+
+    docker run -d --name pbs-auth-server \
+      -p 8099:8099 \
+      -v "$PWD/secret.key:/run/secrets/pbs_auth_secret:ro" \
+      -e PBS_AUTH_SECRET=/run/secrets/pbs_auth_secret \
+      --read-only --security-opt no-new-privileges \
+      ghcr.io/ftaeger/pbs-sync-auth:latest
+
+The server speaks plain HTTP on `:8099`; put a reverse proxy in front for TLS. A
+ready-to-use Traefik + Let's Encrypt setup (HTTP-01 or Cloudflare DNS-01) is in
+[`examples/traefik/`](examples/traefik/); a standalone binary + systemd variant is
+in [`server/README.md`](server/README.md).
+
+### 3. Client (source PBS)
+
+> On a PBS you operate as **root**, so the client commands below use **no `sudo`**.
+
+Choose one of the two install options, then configure and enable.
+
+**Option A — APT repository (recommended, updates via `apt upgrade`)**
+
+    curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
+      | gpg --dearmor > /usr/share/keyrings/pbs-sync-auth.gpg
+
+    echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
+      https://ftaeger.github.io/pbs-sync-auth stable main" \
+      > /etc/apt/sources.list.d/pbs-sync-auth.list
+
+    apt update && apt install pbs-sync-auth-client
+
+**Option B — manual, single `.deb`**
+
+Download `pbs-sync-auth-client_X.Y.Z_amd64.deb` from the
+[releases page](https://github.com/ftaeger/pbs-sync-auth/releases) and install it:
+
+    apt install ./pbs-sync-auth-client_X.Y.Z_amd64.deb
+
+(For a plain-binary install without a package, see
+[`client/README.md`](client/README.md).)
+
+**Configure and enable (both options)**
+
+    # 1) point the client at your auth server and sync job
+    $EDITOR /etc/pbs-sync-auth/client.conf        # PBS_AUTH_URL, PBS_SYNC_JOB, …
+
+    # 2) install the shared secret (the SAME secret.key as on the server)
+    install -m 600 secret.key /etc/pbs-sync-auth/secret.key
+
+    # 3) enable the 30-min timer
+    systemctl enable --now pbs-sync-auth.timer
+
+Verify a manual run:
+
+    systemctl start pbs-sync-auth.service
+    journalctl -u pbs-sync-auth.service -n 20
+
+The PBS-side setup (remote, push sync job, permissions) is in
+[`docs/pbs-source.md`](docs/pbs-source.md) (source) and
+[`docs/pbs-target.md`](docs/pbs-target.md) (target).
 
 ## Configuration
 
