@@ -1,14 +1,22 @@
 name: Build & Release
 
-# On every push to main: build static binaries (as workflow artifacts) and push
-# a multi-arch server image to ghcr.io tagged :latest and :sha-<short>.
-# On a vX.Y.Z tag: additionally publish a versioned image and a GitHub Release
-# with the binaries attached.
+# On every push to main: push a multi-arch server image to ghcr.io tagged
+# :latest and :sha-<short> (for testing).
+# On a vX.Y.Z tag: build the static binaries and the client .deb, publish a
+# versioned image, and cut a GitHub Release with the binaries + .deb attached.
+# Binaries/.deb/release are gated to tags so merging a release PR and then
+# tagging the same commit does not rebuild them twice.
 on:
   push:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+
+# Don't stack runs for the same ref: a newer push to main cancels an in-flight
+# main run. Tags each have a unique ref, so a release run is never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: write   # create GitHub releases
@@ -19,6 +27,8 @@ env:
 
 jobs:
   binaries:
+    # Release artifacts: only on tags (or a manual run), not on every main push.
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -88,6 +98,7 @@ jobs:
 
   deb:
     needs: binaries
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
