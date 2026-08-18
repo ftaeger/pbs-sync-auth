@@ -1,0 +1,30 @@
+[Unit]
+Description=pbs-sync-auth server (challenge-response auth for the guarded PBS offsite push)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Runs the standalone binary at /usr/local/bin/pbs-auth-server.
+# The shared secret is passed via a systemd credential so the (dynamic,
+# unprivileged) service user can read it without loosening file permissions on
+# /etc/pbs-sync-auth/secret.key (keep it root:root 600).
+DynamicUser=yes
+LoadCredential=secret:/etc/pbs-sync-auth/secret.key
+Environment=PBS_AUTH_HOST=0.0.0.0
+Environment=PBS_AUTH_PORT=8099
+Environment=PBS_AUTH_SECRET=%d/secret
+ExecStart=/usr/local/bin/pbs-auth-server
+Restart=on-failure
+RestartSec=5
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

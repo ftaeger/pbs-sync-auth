@@ -19,16 +19,51 @@ Client counterpart: [`../client/`](../client/).
 ## Endpoints
     POST /auth/challenge  {client_nonce}                          -> {server_nonce, server_proof}
     POST /auth/verify     {client_nonce, server_nonce, client_proof} -> {status:"ok"}
+    GET  /healthz                                                 -> 200 "ok"  (health check)
 
-## Build & run (manual)
+## Deployment
+
+Pick one of the following. In every case the server needs the shared `secret.key`
+(see below) and listens on `:8099` (HTTP; put a reverse proxy in front for TLS).
+
+### A) Prebuilt Docker image (recommended)
+A multi-arch image is published on every push to `main` and for each release tag.
+It runs on **x86_64, arm64 and armv7** — including Raspberry Pi 3/4/5.
+
+    docker run -d --name pbs-auth-server \
+      -p 8099:8099 \
+      -v "$PWD/secret.key:/run/secrets/pbs_auth_secret:ro" \
+      -e PBS_AUTH_SECRET=/run/secrets/pbs_auth_secret \
+      --read-only --security-opt no-new-privileges \
+      ghcr.io/ftaeger/pbs-sync-auth:latest
+
+Tags: `latest`, `sha-<short>` (per main commit), and `X.Y.Z` / `vX.Y.Z` (releases).
+
+### B) Behind Traefik (TLS)
+Ready-to-use `docker-compose` setups with Let's Encrypt (HTTP-01 or Cloudflare
+DNS-01) are in [`../examples/traefik/`](../examples/traefik/).
+
+### C) Standalone binary + systemd
+Download the `pbs-auth-server-linux-<arch>` binary from the
+[releases](https://github.com/ftaeger/pbs-sync-auth/releases) (or build it, below):
+
+    sudo install -m 0755 pbs-auth-server-linux-amd64 /usr/local/bin/pbs-auth-server
+    sudo mkdir -p /etc/pbs-sync-auth
+    sudo cp secret.key /etc/pbs-sync-auth/secret.key && sudo chmod 600 /etc/pbs-sync-auth/secret.key
+    sudo cp systemd/pbs-sync-auth-server.service /etc/systemd/system/
+    sudo systemctl daemon-reload && sudo systemctl enable --now pbs-sync-auth-server.service
+    systemctl status pbs-sync-auth-server.service
+
+### Build the image locally (manual)
 On an x86_64 host directly:
 
     cp /path/to/secret.key ./secret.key
     docker compose up -d --build
 
-Build the image for x86_64 on an Apple Silicon Mac:
+Build a multi-arch image with buildx:
 
-    docker buildx build --platform linux/amd64 -t pbs-auth-server:latest --load .
+    docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 \
+      -t pbs-auth-server:latest .
 
 ## Configuration (environment)
     PBS_AUTH_HOST     0.0.0.0

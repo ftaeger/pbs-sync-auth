@@ -1,5 +1,7 @@
 # pbs-sync-auth
 
+[![Build & Release](https://github.com/ftaeger/pbs-sync-auth/actions/workflows/build.yml/badge.svg)](https://github.com/ftaeger/pbs-sync-auth/actions/workflows/build.yml)
+
 A small authentication gatekeeper that lets a **Proxmox Backup Server (PBS)** run
 its offsite **push sync** *only* when it can reach — and cryptographically verify
 — a trusted counterpart over the network. It is **not** a backup transport; it
@@ -65,22 +67,40 @@ unforgeable even over plain HTTP — only the random nonces are visible on the w
 See [`server/README.md`](server/README.md) and [`client/README.md`](client/README.md)
 for building and deploying, and [`docs/`](docs/) for the PBS-side setup.
 
+## Deployment
+
+The server is published as a multi-arch Docker image that runs on **x86_64,
+arm64 and armv7** (including Raspberry Pi 3/4/5):
+
+    docker pull ghcr.io/ftaeger/pbs-sync-auth:latest
+
+Deploy it as a container, behind Traefik for TLS, or as a standalone binary +
+systemd — see [`server/README.md`](server/README.md). A complete Traefik +
+Let's Encrypt example (HTTP-01 or Cloudflare DNS-01) is in
+[`examples/traefik/`](examples/traefik/). Prebuilt binaries for each release are
+on the [releases page](https://github.com/ftaeger/pbs-sync-auth/releases).
+
 ## Configuration
 
 Environment variables (see the component READMEs for defaults):
 
-    PBS_AUTH_SECRET   path to the shared secret (default /etc/pbs-sync-auth/secret.key)
-    PBS_AUTH_URL      client: auth server base URL
-    PBS_AUTH_PORT     server: listen port (default 8099)
-    PBS_SYNC_JOB      client: PBS sync job to run (default offsite-push)
-    PBS_AUTH_TIMEOUT  client: HTTP timeout (default 3s)
+    PBS_AUTH_SECRET     path to the shared secret (default /etc/pbs-sync-auth/secret.key)
+    PBS_AUTH_URL        client: auth server base URL (http:// or https://)
+    PBS_AUTH_PORT       server: listen port (default 8099)
+    PBS_SYNC_JOB        client: PBS sync job to run (default offsite-push)
+    PBS_AUTH_TIMEOUT    client: HTTP timeout (default 3s)
+    PBS_AUTH_TLS_VERIFY client: verify the server cert on https (default true)
+    PBS_AUTH_TLS_CA     client: optional PEM CA bundle to trust (internal CA)
 
-## Roadmap
+## TLS (defense in depth)
 
-- Put a TLS-terminating reverse proxy in front of the server (HTTPS/REST), and
-  have the client verify the TLS certificate *before* starting the HMAC round
-  (defense in depth), with verification toggleable via env. The HMAC auth stays
-  **in addition** to the TLS check, not replaced by it.
+For an `https://` `PBS_AUTH_URL`, the client performs the TLS handshake as the
+**first gate** — if certificate verification fails it aborts before the HMAC
+round. A publicly trusted certificate (e.g. Let's Encrypt via the Traefik
+example) needs no extra client config; `PBS_AUTH_TLS_CA` trusts an internal CA,
+and `PBS_AUTH_TLS_VERIFY=false` disables verification for testing only. The mutual
+HMAC authentication always runs **in addition** to the TLS check, never instead
+of it — so the gate stays unforgeable even over plain HTTP.
 
 ## Conventions
 

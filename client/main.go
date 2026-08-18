@@ -13,12 +13,15 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -44,6 +47,38 @@ func loadSecret(path string) ([]byte, error) {
 	return hex.DecodeString(strings.TrimSpace(string(data)))
 }
 
+// buildHTTPClient constructs the HTTP client used for the auth calls. For https
+// URLs the TLS handshake is the first gate: it happens on the first request
+// (/auth/challenge), so if certificate verification fails, authenticate()
+// returns before any HMAC round is performed (TLS-first, then auth).
+func buildHTTPClient(timeout time.Duration) (*http.Client, error) {
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
+
+	// PBS_AUTH_TLS_VERIFY=false disables certificate verification (test/dev only).
+	if verify, _ := strconv.ParseBool(env("PBS_AUTH_TLS_VERIFY", "true")); !verify {
+		tlsCfg.InsecureSkipVerify = true
+	}
+
+	// PBS_AUTH_TLS_CA (optional): trust a custom CA bundle (e.g. an internal CA)
+	// instead of only the system roots. Unset -> system roots are used.
+	if caPath := os.Getenv("PBS_AUTH_TLS_CA"); caPath != "" {
+		pem, err := os.ReadFile(caPath)
+		if err != nil {
+			return nil, fmt.Errorf("tls ca: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("tls ca: no certificates found in %s", caPath)
+		}
+		tlsCfg.RootCAs = pool
+	}
+
+	return &http.Client{
+		Timeout:   timeout,
+		Transport: &http.Transport{TLSClientConfig: tlsCfg},
+	}, nil
+}
+
 func post(client *http.Client, url string, payload any, out any) error {
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(url, "application/json", bytes.NewReader(body))
@@ -67,7 +102,10 @@ func authenticate() error {
 	if err != nil {
 		timeout = 3 * time.Second
 	}
-	client := &http.Client{Timeout: timeout}
+	client, err := buildHTTPClient(timeout)
+	if err != nil {
+		return err
+	}
 
 	nb := make([]byte, 16)
 	if _, err := rand.Read(nb); err != nil {

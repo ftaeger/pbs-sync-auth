@@ -54,34 +54,33 @@ unforgeable even over plain HTTP — only the random nonces are visible.
 
 ## Current state
 
-- Server listens on **plain HTTP :8099** (`PBS_AUTH_PORT`).
-- Client default `PBS_AUTH_URL = http://pbs-sync-auth.example.com:8099`.
-- `server/docker-compose.yml` publishes port 8099 directly, **no** reverse proxy.
-- No TLS.
+- Server listens on internal **plain HTTP :8099** (`PBS_AUTH_PORT`); TLS is
+  terminated by a reverse proxy in front (see the Traefik example).
+- Endpoints: `POST /auth/challenge`, `POST /auth/verify`, `GET /healthz`.
+- Client supports `https://` `PBS_AUTH_URL` with system-root verification; TLS is
+  the first gate before the HMAC round. Toggles: `PBS_AUTH_TLS_VERIFY`
+  (default true), `PBS_AUTH_TLS_CA` (optional internal-CA bundle).
+- Packaging: multi-arch server image (`amd64`, `arm64`, `arm/v7`, incl. Raspberry
+  Pi 3/4/5) on `ghcr.io/ftaeger/pbs-sync-auth`; static release binaries for
+  server and client. Built by GitHub Actions (`.github/workflows/`): `ci.yml`
+  validates PRs; `build.yml` builds/pushes on `main` and cuts a Release on a
+  `vX.Y.Z` tag.
+- Example deployment with Traefik + Let's Encrypt (HTTP-01 and Cloudflare DNS-01)
+  in `examples/traefik/`.
 
-## Roadmap (continue here)
+## Roadmap / possible next steps
 
-Goal: make the service reachable over **HTTPS / REST**, with a **reverse proxy**
-(e.g. Traefik) in front of the container terminating TLS, and have the client
-**verify the TLS certificate before** starting the HMAC authentication.
+The HTTPS-via-reverse-proxy goal and the client-side TLS gate are **done** (see
+Current state). Remaining ideas, only if a concrete need arises:
 
-1. **Reverse proxy in front:** the Go server stays internal HTTP on :8099; the
-   proxy terminates TLS and routes to the container. Add a proxy service + labels
-   to `docker-compose.yml` for standalone operation.
-2. **Client — TLS first, then auth:** the TLS handshake against the HTTPS URL is
-   the first gate. If certificate verification fails, abort **without** the HMAC
-   round. Verification must be **toggleable** (env, e.g.
-   `PBS_AUTH_TLS_VERIFY=true|false`; `false` → `InsecureSkipVerify`). Optional:
-   custom CA (`PBS_AUTH_TLS_CA`) or fingerprint pinning (mirroring the PBS
-   fingerprint concept).
-3. **Switch defaults:** `PBS_AUTH_URL` to `https://…` (port 443 via the proxy).
-   Update docs and env tables accordingly.
-4. Keep the REST surface clean: JSON endpoints under `/auth/*`; optionally add
-   `/healthz` for the proxy health check.
+- SPKI/public-key pinning for the client (deliberately **not** implemented: leaf
+  pinning breaks on Let's Encrypt's ~90-day renewals, and publicly trusted certs
+  make it unnecessary).
+- Rate limiting / basic abuse protection on the server endpoints.
+- Optional structured/JSON logging.
 
-When reworking, **preserve** the existing security properties (see Protocol) and
-keep the HMAC auth **in addition** to the TLS check (defense in depth), not
-instead of it.
+Always **preserve** the existing security properties (see Protocol) and keep the
+HMAC auth **in addition** to any TLS check (defense in depth), never instead.
 
 ## Build & test
 

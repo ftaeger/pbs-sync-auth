@@ -123,6 +123,14 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "denied"})
 }
 
+// healthHandler is a liveness endpoint for reverse-proxy health checks
+// (e.g. Traefik). It performs no authentication and returns no sensitive data.
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok\n"))
+}
+
 func loadSecret(path string) ([]byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -149,6 +157,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/challenge", challengeHandler)
 	mux.HandleFunc("/auth/verify", verifyHandler)
+	mux.HandleFunc("/healthz", healthHandler)
 
 	srv := &http.Server{
 		Addr:              addr,

@@ -1,0 +1,101 @@
+name: Build & Release
+
+# On every push to main: build static binaries (as workflow artifacts) and push
+# a multi-arch server image to ghcr.io tagged :latest and :sha-<short>.
+# On a vX.Y.Z tag: additionally publish a versioned image and a GitHub Release
+# with the binaries attached.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create GitHub releases
+  packages: write   # push to ghcr.io
+
+env:
+  IMAGE: ghcr.io/ftaeger/pbs-sync-auth
+
+jobs:
+  binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goarch: amd64 }
+          - { goarch: arm64 }
+          - { goarch: arm, goarm: '7' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Build static binaries (server + client)
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+          GOARM: ${{ matrix.goarm }}
+        run: |
+          mkdir -p dist
+          arch="${GOARCH}${GOARM:+v$GOARM}"
+          for comp in server client; do
+            ( cd "$comp" && go build -ldflags="-s -w" -o "../dist/pbs-auth-$comp-linux-$arch" . )
+          done
+          ls -l dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.goarch }}${{ matrix.goarm }}
+          path: dist/*
+          if-no-files-found: error
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-,enable={{is_default_branch}}
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: server
+          platforms: linux/amd64,linux/arm64,linux/arm/v7
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  release:
+    needs: binaries
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" artifacts/* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes

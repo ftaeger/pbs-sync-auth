@@ -1,0 +1,31 @@
+name: CI
+
+# Validate both Go modules on every pull request (fast: fmt, vet, build).
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [client, server]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: gofmt
+        working-directory: ${{ matrix.module }}
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1
+          fi
+      - name: go vet
+        working-directory: ${{ matrix.module }}
+        run: go vet ./...
+      - name: go build
+        working-directory: ${{ matrix.module }}
+        run: go build ./...

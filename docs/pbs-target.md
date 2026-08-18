@@ -29,16 +29,20 @@ Transfer a copy securely to the source PBS (see the source docs,
 `/etc/pbs-sync-auth/secret.key`).
 
 ## 2. Deploy the auth server
-Runs on its own host `pbs-sync-auth.example.com`. Manual test on that host:
+Runs on its own host `pbs-sync-auth.example.com`. Recommended: the prebuilt
+multi-arch image behind Traefik for TLS — see
+[`../examples/traefik/`](../examples/traefik/) and
+[`../server/README.md`](../server/README.md) for the container, standalone-binary
+and reverse-proxy options.
+
+Quick manual test on that host (plain HTTP, no TLS):
 
     cd ../server
     cp /path/to/secret.key ./secret.key
     docker compose up -d --build          # listens on :8099
 
-Port **8099/tcp** on the auth host must be reachable from the source PBS (open the
-firewall accordingly). Unlike typical web services this one needs no 80/443
-reverse proxy, only 8099 — although putting a TLS-terminating reverse proxy in
-front of it is on the roadmap (see the project README).
+Open the firewall so the source PBS can reach the auth server: **443/tcp** when
+running behind Traefik (recommended), or **8099/tcp** for the plain-HTTP setup.
 
 ## 3. Create the target namespace
 Assuming the datastore `DATASTORE` already exists, create a dedicated namespace

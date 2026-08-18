@@ -2,9 +2,16 @@
 secret.key
 *.key
 
-# Built client binary
+# Built binaries / CI output
 /client/pbs-auth-client
 pbs-auth-client
+pbs-auth-server
+/dist/
+
+# Traefik example: ACME account + issued certificates
+letsencrypt/
+acme.json
+.env
 
 # OS cruft
 .DS_Store

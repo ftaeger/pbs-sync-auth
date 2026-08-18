@@ -1,0 +1,54 @@
+# pbs-sync-auth behind Traefik, TLS via Let's Encrypt (HTTP-01 challenge).
+#
+# Requirements:
+#   - $DOMAIN resolves to this host (public DNS record)
+#   - ports 80 and 443 reachable from the internet (HTTP-01 validates over :80)
+#   - ./secret.key present:  openssl rand -hex 32 > secret.key
+#
+# Usage:
+#   cp .env.example .env        # set DOMAIN + ACME_EMAIL
+#   docker compose -f docker-compose.http01.yml up -d
+
+services:
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      # redirect all plain HTTP to HTTPS
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.le.acme.httpchallenge=true
+      - --certificatesresolvers.le.acme.httpchallenge.entrypoint=web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+  pbs-sync-auth:
+    image: ghcr.io/ftaeger/pbs-sync-auth:latest
+    restart: unless-stopped
+    environment:
+      PBS_AUTH_HOST: "0.0.0.0"
+      PBS_AUTH_PORT: "8099"
+      PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+    volumes:
+      # Shared secret, mounted read-only. Identical to the client's secret.
+      - ./secret.key:/run/secrets/pbs_auth_secret:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.pbsauth.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.pbsauth.entrypoints=websecure
+      - traefik.http.routers.pbsauth.tls.certresolver=le
+      - traefik.http.services.pbsauth.loadbalancer.server.port=8099
+      - traefik.http.services.pbsauth.loadbalancer.healthcheck.path=/healthz

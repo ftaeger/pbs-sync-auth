@@ -6,7 +6,11 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 Environment=PBS_AUTH_SECRET=/etc/pbs-sync-auth/secret.key
-Environment=PBS_AUTH_URL=http://pbs-sync-auth.example.com:8099
+Environment=PBS_AUTH_URL=https://pbs-sync-auth.example.com
 Environment=PBS_SYNC_JOB=offsite-push
 Environment=PBS_AUTH_TIMEOUT=3s
+# TLS (only relevant for https URLs). Defaults verify against the system roots,
+# which is correct for a publicly trusted (e.g. Let's Encrypt) certificate.
+#   Environment=PBS_AUTH_TLS_VERIFY=false                 # test/dev only
+#   Environment=PBS_AUTH_TLS_CA=/etc/pbs-sync-auth/ca.pem # trust an internal CA
 ExecStart=/usr/local/bin/pbs-auth-client

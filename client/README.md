@@ -59,10 +59,21 @@ Manual test:
     journalctl -u pbs-sync-auth.service -n 20
 
 ## Configuration (environment, set in pbs-sync-auth.service)
-    PBS_AUTH_URL      http://pbs-sync-auth.example.com:8099
-    PBS_AUTH_SECRET   /etc/pbs-sync-auth/secret.key
-    PBS_AUTH_TIMEOUT  3s
-    PBS_SYNC_JOB      offsite-push
+    PBS_AUTH_URL        https://pbs-sync-auth.example.com   (http:// also supported)
+    PBS_AUTH_SECRET     /etc/pbs-sync-auth/secret.key
+    PBS_AUTH_TIMEOUT    3s
+    PBS_SYNC_JOB        offsite-push
+    PBS_AUTH_TLS_VERIFY true    verify the server certificate (https only); false = test/dev only
+    PBS_AUTH_TLS_CA     (unset) optional PEM CA bundle to trust instead of the system roots
+
+### TLS
+When `PBS_AUTH_URL` is an `https://` URL, the TLS handshake is the **first gate**:
+it happens on the first request, so if certificate verification fails the client
+aborts *before* the HMAC round runs. A publicly trusted certificate (e.g. Let's
+Encrypt via the [Traefik example](../examples/traefik/)) needs no extra config.
+`PBS_AUTH_TLS_CA` lets you trust an internal CA; `PBS_AUTH_TLS_VERIFY=false`
+disables verification and is meant for testing only. The mutual HMAC
+authentication always runs *in addition* to the TLS check (defense in depth).
 
 ## Exit codes
     0  auth ok, sync job started
