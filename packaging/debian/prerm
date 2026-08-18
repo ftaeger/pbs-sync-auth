@@ -1,0 +1,21 @@
+#!/bin/sh
+# Pre-removal: stop and disable the timer/service if the package is going away.
+set -e
+
+case "$1" in
+  remove|deconfigure)
+    if [ -d /run/systemd/system ]; then
+      systemctl --no-reload disable --now pbs-sync-auth.timer >/dev/null 2>&1 || true
+      systemctl stop pbs-sync-auth.service >/dev/null 2>&1 || true
+    fi
+    ;;
+  upgrade|failed-upgrade)
+    # Keep the timer running across upgrades.
+    ;;
+  *)
+    echo "prerm called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0

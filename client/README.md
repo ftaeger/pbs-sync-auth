@@ -38,7 +38,30 @@ Without Docker, using a local Go toolchain:
 
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pbs-auth-client .
 
-## Installation on the PBS
+## Installation via Debian package (recommended for PBS 4.x)
+A prebuilt `.deb` (amd64) is attached to each GitHub release and installs the
+binary to `/usr/bin/pbs-auth-client`, the systemd `.service`/`.timer`, and a
+config file at `/etc/pbs-sync-auth/client.conf`. The shared secret is **not**
+shipped — you provide it yourself (see below). The package does **not** start the
+timer; you enable it once configured.
+
+    sudo apt install ./pbs-sync-auth-client_X.Y.Z_amd64.deb
+
+    # 1) adjust the config (at least PBS_AUTH_URL and PBS_SYNC_JOB)
+    sudo $EDITOR /etc/pbs-sync-auth/client.conf
+
+    # 2) place the shared secret (identical to the server's key)
+    openssl rand -hex 32 | sudo tee /etc/pbs-sync-auth/secret.key >/dev/null
+    sudo chmod 600 /etc/pbs-sync-auth/secret.key
+
+    # 3) enable and start the timer
+    sudo systemctl enable --now pbs-sync-auth.timer
+
+Config edits in `/etc/pbs-sync-auth/client.conf` survive package upgrades (it is a
+dpkg conffile). The `.deb` is built by CI from `packaging/` — see
+[`../packaging/README.md`](../packaging/README.md) to build one locally.
+
+## Manual installation on the PBS
     sudo cp pbs-auth-client /usr/local/bin/ && sudo chmod +x /usr/local/bin/pbs-auth-client
 
 Place the shared secret (identical to the server's, see the target docs):

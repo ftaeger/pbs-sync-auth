@@ -1,0 +1,39 @@
+#!/bin/sh
+# Post-installation: ensure the config directory exists and reload systemd.
+# The timer is deliberately NOT enabled/started here — the operator must first
+# place the shared secret and adjust the configuration.
+set -e
+
+case "$1" in
+  configure)
+    # Defensive: dpkg already creates this via the client.conf conffile.
+    [ -d /etc/pbs-sync-auth ] || mkdir -p /etc/pbs-sync-auth
+
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload || true
+    fi
+
+    # Only on a fresh install ($2 empty), print activation instructions.
+    if [ -z "$2" ]; then
+      cat <<'EOF'
+
+pbs-sync-auth-client installed. To activate the offsite push:
+  1. Adjust /etc/pbs-sync-auth/client.conf (at least PBS_AUTH_URL and PBS_SYNC_JOB).
+  2. Create the shared secret (identical to the server's key):
+       openssl rand -hex 32 | sudo tee /etc/pbs-sync-auth/secret.key >/dev/null
+       sudo chmod 600 /etc/pbs-sync-auth/secret.key
+  3. Enable and start the timer:
+       sudo systemctl enable --now pbs-sync-auth.timer
+
+EOF
+    fi
+    ;;
+  abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+  *)
+    echo "postinst called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
