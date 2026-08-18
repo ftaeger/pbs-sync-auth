@@ -1,0 +1,18 @@
+services:
+  pbs-auth:
+    build: .
+    image: pbs-auth-server:latest
+    container_name: pbs-auth-server
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    environment:
+      PBS_AUTH_HOST: "0.0.0.0"
+      PBS_AUTH_PORT: "8099"
+      PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+    volumes:
+      # Mount the shared secret read-only into the container
+      - ./secret.key:/run/secrets/pbs_auth_secret:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

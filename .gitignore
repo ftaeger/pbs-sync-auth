@@ -1,0 +1,10 @@
+# Shared secret — never commit
+secret.key
+*.key
+
+# Built client binary
+/client/pbs-auth-client
+pbs-auth-client
+
+# OS cruft
+.DS_Store

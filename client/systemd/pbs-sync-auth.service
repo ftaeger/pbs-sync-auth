@@ -1,0 +1,12 @@
+[Unit]
+Description=PBS offsite push (mutual challenge-response auth + sync job)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=PBS_AUTH_SECRET=/etc/pbs-sync-auth/secret.key
+Environment=PBS_AUTH_URL=http://pbs-sync-auth.example.com:8099
+Environment=PBS_SYNC_JOB=offsite-push
+Environment=PBS_AUTH_TIMEOUT=3s
+ExecStart=/usr/local/bin/pbs-auth-client
