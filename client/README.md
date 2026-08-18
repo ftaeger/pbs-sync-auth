@@ -38,12 +38,29 @@ Without Docker, using a local Go toolchain:
 
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pbs-auth-client .
 
-## Installation via Debian package (recommended for PBS 4.x)
-A prebuilt `.deb` (amd64) is attached to each GitHub release and installs the
-binary to `/usr/bin/pbs-auth-client`, the systemd `.service`/`.timer`, and a
-config file at `/etc/pbs-sync-auth/client.conf`. The shared secret is **not**
-shipped — you provide it yourself (see below). The package does **not** start the
-timer; you enable it once configured.
+## Installation via APT repository (recommended for PBS 4.x)
+Add the signed APT repo once; `apt upgrade` then keeps the client up to date.
+
+    curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
+      | gpg --dearmor | sudo tee /usr/share/keyrings/pbs-sync-auth.gpg >/dev/null
+
+    echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
+      https://ftaeger.github.io/pbs-sync-auth stable main" \
+      | sudo tee /etc/apt/sources.list.d/pbs-sync-auth.list
+
+    sudo apt update && sudo apt install pbs-sync-auth-client
+
+Then configure it (same as below): edit `/etc/pbs-sync-auth/client.conf`, place
+`/etc/pbs-sync-auth/secret.key`, and `systemctl enable --now pbs-sync-auth.timer`.
+The repo is rebuilt and signed by CI on each release; see
+[`../packaging/README.md`](../packaging/README.md).
+
+## Installation via a single Debian package
+If you prefer not to add a repo, a prebuilt `.deb` (amd64) is attached to each
+GitHub release. It installs the binary to `/usr/bin/pbs-auth-client`, the systemd
+`.service`/`.timer`, and a config file at `/etc/pbs-sync-auth/client.conf`. The
+shared secret is **not** shipped — you provide it yourself. The package does
+**not** start the timer; you enable it once configured.
 
     sudo apt install ./pbs-sync-auth-client_X.Y.Z_amd64.deb
 

@@ -145,3 +145,50 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes
+
+  # Rebuild the signed APT repo from all release .debs and deploy it to Pages.
+  # Runs after `release` on a tag, or standalone via workflow_dispatch (to
+  # (re)publish from the releases that already exist).
+  apt:
+    needs: [release]
+    if: >
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       (startsWith(github.ref, 'refs/tags/') && needs.release.result == 'success'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Serialize Pages deploys without cancelling an in-flight one.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install reprepro
+        run: sudo apt-get update && sudo apt-get install -y reprepro
+      - name: Import signing key
+        run: printf '%s\n' "${GPG_PRIVATE_KEY}" | gpg --batch --import
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+      - name: Download .deb assets from all releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p debs
+          for tag in $(gh release list --repo "$GITHUB_REPOSITORY" --json tagName --jq '.[].tagName'); do
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern '*.deb' --dir debs --skip-existing || true
+          done
+          ls -l debs
+      - name: Build signed APT repo
+        run: packaging/build-apt-repo.sh debs public "${{ vars.GPG_KEY_FPR }}"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - id: deploy
+        uses: actions/deploy-pages@v4
