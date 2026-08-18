@@ -1,0 +1,8 @@
+Origin: pbs-sync-auth
+Label: pbs-sync-auth
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: pbs-sync-auth client packages for Proxmox Backup Server
+SignWith: @FPR@

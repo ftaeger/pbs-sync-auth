@@ -72,6 +72,12 @@ unforgeable even over plain HTTP — only the random nonces are visible.
   server image; the binaries, `.deb` and GitHub Release are gated to `vX.Y.Z`
   tags (so merging a release PR and then tagging the same commit doesn't rebuild
   them twice). A per-ref `concurrency` group cancels superseded `main` runs.
+- Signed **APT repository** on GitHub Pages (`https://ftaeger.github.io/pbs-sync-auth/`)
+  so a PBS can `apt install pbs-sync-auth-client` and get updates via `apt
+  upgrade`. Rebuilt statelessly from all release `.deb`s by the `apt` job in
+  `build.yml` (reprepro + `deploy-pages`), signed with a dedicated ed25519 key
+  (private in secret `GPG_PRIVATE_KEY`, fingerprint in var `GPG_KEY_FPR`, public
+  in `packaging/apt/pubkey.asc`). Config lives in `packaging/apt/`.
 - Example deployment with Traefik + Let's Encrypt (HTTP-01 and Cloudflare DNS-01)
   in `examples/traefik/`.
 
