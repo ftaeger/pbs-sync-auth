@@ -15,3 +15,6 @@ acme.json
 
 # OS cruft
 .DS_Store
+
+# AI-assist context, kept local (not published)
+CLAUDE.md
