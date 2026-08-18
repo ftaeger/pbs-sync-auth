@@ -67,9 +67,11 @@ unforgeable even over plain HTTP — only the random nonces are visible.
   **client** (amd64, for PBS 4.x / Debian 13) built from `packaging/` via
   `dpkg-deb` (config as a conffile at `/etc/pbs-sync-auth/client.conf`, secret not
   shipped, timer not auto-started).
-  Built by GitHub Actions (`.github/workflows/`): `ci.yml` validates PRs;
-  `build.yml` builds/pushes on `main` and cuts a Release (binaries + `.deb`) on a
-  `vX.Y.Z` tag.
+  Built by GitHub Actions (`.github/workflows/`): `ci.yml` validates PRs (incl. a
+  `.deb` build). `build.yml` on a push to `main` only pushes the `:latest`/`:sha`
+  server image; the binaries, `.deb` and GitHub Release are gated to `vX.Y.Z`
+  tags (so merging a release PR and then tagging the same commit doesn't rebuild
+  them twice). A per-ref `concurrency` group cancels superseded `main` runs.
 - Example deployment with Traefik + Let's Encrypt (HTTP-01 and Cloudflare DNS-01)
   in `examples/traefik/`.
 
