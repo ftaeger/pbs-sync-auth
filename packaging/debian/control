@@ -1,0 +1,18 @@
+Package: pbs-sync-auth-client
+Version: @VERSION@
+Section: admin
+Priority: optional
+Architecture: @ARCH@
+Maintainer: Florian Taeger <florian@taeger.cc>
+Depends: systemd
+Recommends: proxmox-backup-server
+Homepage: https://github.com/ftaeger/pbs-sync-auth
+Description: Guarded offsite push auth client for Proxmox Backup Server
+ Performs a mutual HMAC-SHA256 challenge-response against the pbs-sync-auth
+ server and, only on success, triggers a PBS push sync job on the local
+ (source) Proxmox Backup Server. Installed on the source PBS and driven by a
+ systemd timer (every 30 min).
+ .
+ The shared secret is deliberately not shipped: create
+ /etc/pbs-sync-auth/secret.key with the same content as on the server, adjust
+ /etc/pbs-sync-auth/client.conf, then enable the pbs-sync-auth.timer.

@@ -23,7 +23,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - { goarch: amd64 }
+          # The client is only built for amd64: Proxmox Backup Server ships
+          # x86_64-only, so there is no supported ARM host to install it on.
+          # The server is built multi-arch (the auth host may be a Raspberry Pi).
+          - { goarch: amd64, client: true }
           - { goarch: arm64 }
           - { goarch: arm, goarm: '7' }
     steps:
@@ -31,16 +34,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
-      - name: Build static binaries (server + client)
+      - name: Build static binaries (server always; client on amd64)
         env:
           CGO_ENABLED: '0'
           GOOS: linux
           GOARCH: ${{ matrix.goarch }}
           GOARM: ${{ matrix.goarm }}
+          BUILD_CLIENT: ${{ matrix.client }}
         run: |
           mkdir -p dist
           arch="${GOARCH}${GOARM:+v$GOARM}"
-          for comp in server client; do
+          comps="server"
+          [ "${BUILD_CLIENT}" = "true" ] && comps="server client"
+          for comp in $comps; do
             ( cd "$comp" && go build -ldflags="-s -w" -o "../dist/pbs-auth-$comp-linux-$arch" . )
           done
           ls -l dist
@@ -80,8 +86,37 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
-  release:
+  deb:
     needs: binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: binaries-amd64
+          path: dist
+      - name: Determine package version
+        id: ver
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then
+            v="${GITHUB_REF_NAME#v}"          # vX.Y.Z -> X.Y.Z
+          else
+            v="0.0.0~git$(git rev-parse --short HEAD)"   # main snapshot
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Build Debian package (client, amd64)
+        run: |
+          chmod +x dist/pbs-auth-client-linux-amd64
+          packaging/build-deb.sh dist/pbs-auth-client-linux-amd64 \
+            "${{ steps.ver.outputs.version }}" amd64 deb-out
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-amd64
+          path: deb-out/*.deb
+          if-no-files-found: error
+
+  release:
+    needs: [binaries, deb]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

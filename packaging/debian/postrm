@@ -1,0 +1,19 @@
+#!/bin/sh
+# Post-removal: reload systemd so the removed units are forgotten.
+set -e
+
+case "$1" in
+  remove|purge|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+    if [ -d /run/systemd/system ]; then
+      systemctl daemon-reload >/dev/null 2>&1 || true
+    fi
+    ;;
+  *)
+    echo "postrm called with unknown argument \`$1'" >&2
+    exit 1
+    ;;
+esac
+
+# Note: /etc/pbs-sync-auth/secret.key is operator-provided and is deliberately
+# left in place, even on purge. Remove it manually if you no longer need it.
+exit 0

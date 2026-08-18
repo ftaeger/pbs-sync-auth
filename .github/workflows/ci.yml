@@ -29,3 +29,17 @@ jobs:
       - name: go build
         working-directory: ${{ matrix.module }}
         run: go build ./...
+
+  package:
+    # Sanity-check the Debian packaging so a broken packaging/ fails the PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Build client binary (amd64)
+        env: { CGO_ENABLED: '0', GOOS: linux, GOARCH: amd64 }
+        run: go build -C client -ldflags="-s -w" -o "$PWD/pbs-auth-client-linux-amd64" .
+      - name: Build .deb
+        run: packaging/build-deb.sh pbs-auth-client-linux-amd64 0.0.0~ci amd64 deb-out

@@ -61,9 +61,14 @@ unforgeable even over plain HTTP — only the random nonces are visible.
   the first gate before the HMAC round. Toggles: `PBS_AUTH_TLS_VERIFY`
   (default true), `PBS_AUTH_TLS_CA` (optional internal-CA bundle).
 - Packaging: multi-arch server image (`amd64`, `arm64`, `arm/v7`, incl. Raspberry
-  Pi 3/4/5) on `ghcr.io/ftaeger/pbs-sync-auth`; static release binaries for
-  server and client. Built by GitHub Actions (`.github/workflows/`): `ci.yml`
-  validates PRs; `build.yml` builds/pushes on `main` and cuts a Release on a
+  Pi 3/4/5) on `ghcr.io/ftaeger/pbs-sync-auth`; static release binaries — server
+  multi-arch, **client amd64-only** (PBS ships x86_64-only, so there is no
+  supported ARM host to install the client on); a Debian `.deb` for the
+  **client** (amd64, for PBS 4.x / Debian 13) built from `packaging/` via
+  `dpkg-deb` (config as a conffile at `/etc/pbs-sync-auth/client.conf`, secret not
+  shipped, timer not auto-started).
+  Built by GitHub Actions (`.github/workflows/`): `ci.yml` validates PRs;
+  `build.yml` builds/pushes on `main` and cuts a Release (binaries + `.deb`) on a
   `vX.Y.Z` tag.
 - Example deployment with Traefik + Let's Encrypt (HTTP-01 and Cloudflare DNS-01)
   in `examples/traefik/`.
