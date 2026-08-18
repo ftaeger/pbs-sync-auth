@@ -12,8 +12,8 @@ jobs:
       matrix:
         module: [client, server]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
       - name: gofmt
@@ -34,8 +34,8 @@ jobs:
     # Sanity-check the Debian packaging so a broken packaging/ fails the PR.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.23'
       - name: Build client binary (amd64)
