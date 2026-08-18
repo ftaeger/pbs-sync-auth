@@ -39,3 +39,26 @@ On a system without `dpkg-deb` (e.g. macOS), run it inside a Debian container:
     docker run --rm -v "$PWD":/w -w /w debian:trixie \
       bash -c 'apt-get update && apt-get install -y dpkg-dev &&
                packaging/build-deb.sh dist/pbs-auth-client-linux-amd64 1.2.3'
+
+# apt/ — signed APT repository (GitHub Pages)
+
+Publishes the client `.deb` in a signed APT repo at
+`https://ftaeger.github.io/pbs-sync-auth/`, so a PBS can `apt install` the client
+and get updates via `apt upgrade`. It is rebuilt statelessly from **all** release
+`.deb` assets on each `vX.Y.Z` tag (and on `workflow_dispatch`) by the `apt` job
+in `build.yml`, then deployed to Pages.
+
+    apt/distributions   reprepro config template (@FPR@ = signing key fingerprint)
+    apt/pubkey.asc       public signing key (also served at the Pages root)
+    apt/index.html       landing page with the setup snippet
+    build-apt-repo.sh    <deb-dir> <out-dir> <fpr> -> signed dists/ + pool/ tree
+
+Signing uses a dedicated ed25519 key: private part in the Actions secret
+`GPG_PRIVATE_KEY`, fingerprint in the variable `GPG_KEY_FPR`, public part in
+`apt/pubkey.asc`. To build locally you need `reprepro` and the signing key in your
+keyring:
+
+    packaging/build-apt-repo.sh <dir-with-debs> public <fingerprint>
+
+Setup instructions for the PBS side are in
+[`../client/README.md`](../client/README.md).

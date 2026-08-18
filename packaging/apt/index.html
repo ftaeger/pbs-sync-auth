@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pbs-sync-auth APT repository</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.6 system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.5rem; }
+  code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  pre { background: rgba(127,127,127,.15); padding: 1rem; border-radius: 8px; overflow-x: auto; }
+  .fpr { word-break: break-all; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>pbs-sync-auth APT repository</h1>
+<p>Signed APT repository for the <strong>pbs-sync-auth</strong> client on a
+Proxmox Backup Server (Debian 13 / amd64). Add it once, then updates arrive via
+<code>apt upgrade</code>.</p>
+
+<h2>Setup on the PBS</h2>
+<pre>curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
+  | gpg --dearmor | sudo tee /usr/share/keyrings/pbs-sync-auth.gpg >/dev/null
+
+echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
+  https://ftaeger.github.io/pbs-sync-auth stable main" \
+  | sudo tee /etc/apt/sources.list.d/pbs-sync-auth.list
+
+sudo apt update
+sudo apt install pbs-sync-auth-client</pre>
+
+<p>After installing, place the shared secret and enable the timer as described in
+the <a href="https://github.com/ftaeger/pbs-sync-auth">project README</a>.</p>
+
+<h2>Signing key</h2>
+<p>Public key: <a href="pubkey.asc">pubkey.asc</a><br>
+Fingerprint: <code class="fpr">@FPR@</code></p>
+</body>
+</html>
