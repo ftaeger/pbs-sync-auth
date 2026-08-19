@@ -79,7 +79,7 @@ The client runs as a daemon. Every `PBS_CHECK_INTERVAL` it:
 3. if the server has a target-PBS gate enabled and the target is down, logs the
    reason and skips,
 4. otherwise, if a backup is due (`PBS_MIN_BACKUP_INTERVAL` since the last
-   successful sync) and none of its own runs is in progress, runs
+   successful sync) and no sync of this job is already running, runs
    `proxmox-backup-manager sync-job run offsite-push`.
 
 If the source PBS cannot reach the auth server, or auth fails, the push is skipped

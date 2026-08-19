@@ -21,9 +21,10 @@ The client is a long-running daemon. Every `PBS_CHECK_INTERVAL` it authenticates
 against the server; if the server reports the target PBS is unavailable it logs
 the reason and skips. Otherwise it starts the push sync job — but only if a backup
 is **due** (`PBS_MIN_BACKUP_INTERVAL` since the last successful sync, queried from
-PBS) and none of its own runs is in progress (it runs the job synchronously, so it
-never overlaps itself). `pbs-auth-client --once` runs a single cycle and exits (see
-*Exit codes*), handy for testing.
+PBS) and no sync of this job is already running (checked against PBS, so runs
+started manually or by the PBS scheduler are respected too; the daemon also runs
+the job synchronously, so it never overlaps itself). `pbs-auth-client --once` runs
+a single cycle and exits (see *Exit codes*), handy for testing.
 
 ## Protocol
 1. Client -> server  POST /auth/challenge {client_nonce}
@@ -131,7 +132,7 @@ disables verification and is meant for testing only. The mutual HMAC
 authentication always runs *in addition* to the TLS check (defense in depth).
 
 ## Exit codes (`--once` mode)
-    0  synced, or skipped because a backup was not yet due
+    0  synced, or skipped (backup not yet due, or a sync already running)
     1  auth server unreachable / auth failed (sync skipped)
     2  auth ok, but `sync-job run` failed
     3  auth ok, but the target PBS is unavailable (sync skipped)

@@ -89,11 +89,35 @@ func TestParseLastSuccessfulSync(t *testing.T) {
 	})
 }
 
+func TestSyncJobRunning(t *testing.T) {
+	data := []byte(`[
+	  {"worker_type":"syncjob","worker_id":"Zentrale:NAS01:elw-backup::offsite-push"},
+	  {"endtime":1787200000,"status":"OK","worker_type":"syncjob","worker_id":"Zentrale:NAS01:elw-backup::offsite-push"}
+	]`)
+	t.Run("running syncjob (no endtime) -> true", func(t *testing.T) {
+		if run, err := syncJobRunning(data, "offsite-push"); err != nil || !run {
+			t.Fatalf("run=%v err=%v", run, err)
+		}
+	})
+	t.Run("only finished tasks -> false", func(t *testing.T) {
+		done := []byte(`[{"endtime":1787200000,"status":"OK","worker_type":"syncjob","worker_id":"x::offsite-push"}]`)
+		if run, _ := syncJobRunning(done, "offsite-push"); run {
+			t.Fatal("finished task must not count as running")
+		}
+	})
+	t.Run("running task of a different job -> false", func(t *testing.T) {
+		if run, _ := syncJobRunning(data, "other"); run {
+			t.Fatal("different job must not match")
+		}
+	})
+}
+
 func TestRunCycle(t *testing.T) {
 	base := cycleDeps{
 		now:       func() time.Time { return time.Unix(100000, 0) },
 		job:       "offsite-push",
 		minBackup: 0,
+		isRunning: func(string) (bool, error) { return false, nil },
 	}
 	okAuth := func() (authResult, error) { return authResult{status: "ok"}, nil }
 	neverSynced := func(string) (time.Time, bool, error) { return time.Time{}, false, nil }
@@ -181,12 +205,43 @@ func TestRunCycle(t *testing.T) {
 			t.Fatal("fail-open should let the sync run")
 		}
 	})
+
+	t.Run("already running -> skip, no sync", func(t *testing.T) {
+		d := base
+		d.authenticate = okAuth
+		d.lastSync = neverSynced
+		d.isRunning = func(string) (bool, error) { return true, nil }
+		called := false
+		d.runSync = func(string) error { called = true; return nil }
+		if got := runCycle(d); got != outcomeSkippedRunning {
+			t.Fatalf("got %v", got)
+		}
+		if called {
+			t.Fatal("must not start a second sync while one runs")
+		}
+	})
+
+	t.Run("isRunning error -> fail-open, sync runs", func(t *testing.T) {
+		d := base
+		d.authenticate = okAuth
+		d.lastSync = neverSynced
+		d.isRunning = func(string) (bool, error) { return false, errors.New("boom") }
+		called := false
+		d.runSync = func(string) error { called = true; return nil }
+		if got := runCycle(d); got != outcomeSynced {
+			t.Fatalf("got %v", got)
+		}
+		if !called {
+			t.Fatal("fail-open should let the sync run")
+		}
+	})
 }
 
 func TestExitCodeFor(t *testing.T) {
 	cases := map[cycleOutcome]int{
 		outcomeSynced:            0,
 		outcomeSkippedNotDue:     0,
+		outcomeSkippedRunning:    0,
 		outcomeAuthFailed:        1,
 		outcomeSyncFailed:        2,
 		outcomeTargetUnavailable: 3,

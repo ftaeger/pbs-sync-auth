@@ -8,7 +8,7 @@
 //
 // With --once it runs a single cycle and exits, for testing/scripting:
 //
-//	Exit 0  -> synced, or skipped because a backup was not yet due
+//	Exit 0  -> synced, or skipped (backup not yet due, or a sync already running)
 //	Exit 1  -> auth server unreachable / auth failed (sync skipped)
 //	Exit 2  -> auth ok, but `sync-job run` failed
 //	Exit 3  -> auth ok, but the target PBS is unavailable (sync skipped)
@@ -228,15 +228,48 @@ func parseLastSuccessfulSync(data []byte, job string) (time.Time, bool, error) {
 	return time.Unix(best, 0), true, nil
 }
 
-// lastSuccessfulSync asks PBS for the last successful run of the sync job. The
-// command and JSON shape were validated against a real PBS 4.x; parsing lives
-// entirely in parseLastSuccessfulSync.
+// taskListJSON returns the raw JSON of the PBS task list. Command/flags validated
+// against a real PBS 4.x.
+func taskListJSON() ([]byte, error) {
+	return exec.Command("proxmox-backup-manager", "task", "list", "--all", "--output-format", "json").Output()
+}
+
+// lastSuccessfulSync asks PBS for the last successful run of the sync job.
 func lastSuccessfulSync(job string) (time.Time, bool, error) {
-	out, err := exec.Command("proxmox-backup-manager", "task", "list", "--all", "--output-format", "json").Output()
+	out, err := taskListJSON()
 	if err != nil {
 		return time.Time{}, false, err
 	}
 	return parseLastSuccessfulSync(out, job)
+}
+
+// syncJobRunning reports whether a sync-job task for the job is currently in
+// progress. A running task has no endtime.
+func syncJobRunning(data []byte, job string) (bool, error) {
+	var tasks []struct {
+		EndTime    int64  `json:"endtime"`
+		WorkerType string `json:"worker_type"`
+		WorkerID   string `json:"worker_id"`
+	}
+	if err := json.Unmarshal(data, &tasks); err != nil {
+		return false, err
+	}
+	for _, tk := range tasks {
+		if tk.EndTime == 0 && syncJobMatches(tk.WorkerType, tk.WorkerID, job) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// syncJobIsRunning checks PBS for an in-progress sync of the job (catches runs
+// started outside this daemon, e.g. manually or by the PBS scheduler).
+func syncJobIsRunning(job string) (bool, error) {
+	out, err := taskListJSON()
+	if err != nil {
+		return false, err
+	}
+	return syncJobRunning(out, job)
 }
 
 // runSyncJob triggers the PBS push sync job and blocks until it finishes.
@@ -252,6 +285,7 @@ type cycleOutcome int
 const (
 	outcomeSynced cycleOutcome = iota
 	outcomeSkippedNotDue
+	outcomeSkippedRunning
 	outcomeTargetUnavailable
 	outcomeAuthFailed
 	outcomeSyncFailed
@@ -262,6 +296,7 @@ const (
 type cycleDeps struct {
 	authenticate func() (authResult, error)
 	lastSync     func(job string) (time.Time, bool, error)
+	isRunning    func(job string) (bool, error)
 	runSync      func(job string) error
 	now          func() time.Time
 	job          string
@@ -282,6 +317,15 @@ func runCycle(d cycleDeps) cycleOutcome {
 		}
 		log.Printf("central side not ready: %s (sync skipped)", reason)
 		return outcomeTargetUnavailable
+	}
+
+	// Skip if a sync for this job is already running (also catches runs started
+	// outside this daemon). Fail-open on error so backups are not blocked.
+	if running, rerr := d.isRunning(d.job); rerr != nil {
+		log.Printf("warning: could not check for a running sync (%v); proceeding", rerr)
+	} else if running {
+		log.Printf("a sync job for %s is already running (sync skipped)", d.job)
+		return outcomeSkippedRunning
 	}
 
 	last, have, lerr := d.lastSync(d.job)
@@ -325,6 +369,7 @@ func main() {
 	deps := cycleDeps{
 		authenticate: authenticate,
 		lastSync:     lastSuccessfulSync,
+		isRunning:    syncJobIsRunning,
 		runSync:      runSyncJob,
 		now:          time.Now,
 		job:          job,
