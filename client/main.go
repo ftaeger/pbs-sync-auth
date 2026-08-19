@@ -324,7 +324,7 @@ func runCycle(d cycleDeps) cycleOutcome {
 	if running, rerr := d.isRunning(d.job); rerr != nil {
 		log.Printf("warning: could not check for a running sync (%v); proceeding", rerr)
 	} else if running {
-		log.Printf("a sync job for %s is already running (sync skipped)", d.job)
+		log.Printf("pbs-sync-auth ok, but a sync job for %s is already running (sync skipped)", d.job)
 		return outcomeSkippedRunning
 	}
 
@@ -334,11 +334,11 @@ func runCycle(d cycleDeps) cycleOutcome {
 		have = false
 	}
 	if due, reason := backupDue(last, have, d.minBackup, d.now()); !due {
-		log.Printf("backup not due: %s (sync skipped)", reason)
+		log.Printf("pbs-sync-auth ok, but backup not due: %s (sync skipped)", reason)
 		return outcomeSkippedNotDue
 	}
 
-	log.Printf("auth ok - starting sync job %s", d.job)
+	log.Printf("pbs-sync-auth ok - starting sync job %s", d.job)
 	if err := d.runSync(d.job); err != nil {
 		log.Printf("sync-job run failed: %v", err)
 		return outcomeSyncFailed

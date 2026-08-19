@@ -95,6 +95,15 @@ Watch it:
     systemctl status pbs-sync-auth.service
     journalctl -u pbs-sync-auth.service -f
 
+To follow the log **from now on** (no old lines), add `-n0`; restart first for a
+fresh run:
+
+    systemctl restart pbs-sync-auth.service
+    journalctl -fu pbs-sync-auth.service -n0
+
+Each cycle logs whether the pbs-sync-auth check succeeded and what happened
+(sync started, backup not due, target PBS unavailable, or a sync already running).
+
 ### Option C — manual, without a package
 Install the binary, secret and the systemd unit by hand:
 
