@@ -180,24 +180,31 @@ func backupDue(last time.Time, haveLast bool, minInterval time.Duration, now tim
 	return true, ""
 }
 
-// upidWorker extracts the worker type and worker id from a PBS UPID string:
-//
-//	UPID:node:pid:pstart:starttime:worktype:workerid:authid:
-func upidWorker(upid string) (wtype, wid string) {
-	parts := strings.Split(upid, ":")
-	if len(parts) < 7 {
-		return "", ""
+// syncJobMatches reports whether a task belongs to the given sync job. PBS
+// reports the job under worker_type "syncjob" with a worker_id that may be a
+// compound like "remote:store:localstore::jobid"; we accept either the whole id
+// or its trailing (last colon-separated) segment.
+func syncJobMatches(workerType, workerID, job string) bool {
+	if workerType != "syncjob" || workerID == "" {
+		return false
 	}
-	return parts[5], parts[6]
+	if workerID == job {
+		return true
+	}
+	parts := strings.Split(workerID, ":")
+	return parts[len(parts)-1] == job
 }
 
 // parseLastSuccessfulSync finds the most recent successful sync-job task for the
-// given job in the JSON output of `proxmox-backup-manager task list`.
+// given job in the JSON output of `proxmox-backup-manager task list`. It reads the
+// worker_type/worker_id/status/endtime fields directly (running tasks carry no
+// status/endtime and are ignored). Validated against real PBS 4.x output.
 func parseLastSuccessfulSync(data []byte, job string) (time.Time, bool, error) {
 	var tasks []struct {
-		UPID    string `json:"upid"`
-		Status  string `json:"status"`
-		EndTime int64  `json:"endtime"`
+		Status     string `json:"status"`
+		EndTime    int64  `json:"endtime"`
+		WorkerType string `json:"worker_type"`
+		WorkerID   string `json:"worker_id"`
 	}
 	if err := json.Unmarshal(data, &tasks); err != nil {
 		return time.Time{}, false, err
@@ -208,7 +215,7 @@ func parseLastSuccessfulSync(data []byte, job string) (time.Time, bool, error) {
 		if tk.Status != "OK" || tk.EndTime <= 0 {
 			continue
 		}
-		if wtype, wid := upidWorker(tk.UPID); wtype != "syncjob" || wid != job {
+		if !syncJobMatches(tk.WorkerType, tk.WorkerID, job) {
 			continue
 		}
 		if tk.EndTime > best {
@@ -221,9 +228,9 @@ func parseLastSuccessfulSync(data []byte, job string) (time.Time, bool, error) {
 	return time.Unix(best, 0), true, nil
 }
 
-// lastSuccessfulSync asks PBS for the last successful run of the sync job.
-// NOTE: the exact command/flags and JSON shape must be validated on a real
-// PBS 4.x; parsing lives entirely in parseLastSuccessfulSync.
+// lastSuccessfulSync asks PBS for the last successful run of the sync job. The
+// command and JSON shape were validated against a real PBS 4.x; parsing lives
+// entirely in parseLastSuccessfulSync.
 func lastSuccessfulSync(job string) (time.Time, bool, error) {
 	out, err := exec.Command("proxmox-backup-manager", "task", "list", "--all", "--output-format", "json").Output()
 	if err != nil {

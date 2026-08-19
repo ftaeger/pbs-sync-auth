@@ -35,32 +35,49 @@ func TestBackupDue(t *testing.T) {
 }
 
 func TestParseLastSuccessfulSync(t *testing.T) {
-	// UPID:node:pid:pstart:starttime:worktype:workerid:authid:
+	// Shape taken from real `proxmox-backup-manager task list --output-format json`
+	// output: direct worker_type/worker_id fields, compound worker_id, running
+	// tasks without status/endtime, and failed tasks with a non-"OK" status.
 	data := []byte(`[
-	  {"upid":"UPID:pbs:1:1:6531A2B0:syncjob:offsite-push:root@pam:","status":"OK","endtime":1000},
-	  {"upid":"UPID:pbs:1:1:6531A2B0:syncjob:offsite-push:root@pam:","status":"OK","endtime":3000},
-	  {"upid":"UPID:pbs:1:1:6531A2B0:syncjob:other-job:root@pam:","status":"OK","endtime":9000},
-	  {"upid":"UPID:pbs:1:1:6531A2B0:garbage:offsite-push:root@pam:","status":"OK","endtime":9000},
-	  {"upid":"UPID:pbs:1:1:6531A2B0:syncjob:offsite-push:root@pam:","status":"failed","endtime":9000}
+	  {"worker_type":"syncjob","worker_id":"Zentrale:NAS01:elw-backup::offsite-push"},
+	  {"endtime":1787126400,"status":"OK","worker_type":"prunejob","worker_id":"elw-backup"},
+	  {"endtime":1787124304,"status":"client error (Connect): deadline elapsed","worker_type":"syncjob","worker_id":"Zentrale:NAS01:elw-backup::offsite-push"},
+	  {"endtime":1787200000,"status":"OK","worker_type":"syncjob","worker_id":"Zentrale:NAS01:elw-backup::offsite-push"},
+	  {"endtime":1787100000,"status":"OK","worker_type":"syncjob","worker_id":"Zentrale:NAS01:elw-backup::offsite-push"},
+	  {"endtime":1787300000,"status":"OK","worker_type":"syncjob","worker_id":"Other:store::different-job"},
+	  {"starttime":1787128220,"worker_type":"termproxy","worker_id":null}
 	]`)
 
-	t.Run("picks latest OK for the job", func(t *testing.T) {
+	t.Run("matches by trailing job segment, picks latest OK", func(t *testing.T) {
 		ts, have, err := parseLastSuccessfulSync(data, "offsite-push")
 		if err != nil || !have {
 			t.Fatalf("have=%v err=%v", have, err)
 		}
-		if ts.Unix() != 3000 {
-			t.Fatalf("want endtime 3000, got %d", ts.Unix())
+		if ts.Unix() != 1787200000 {
+			t.Fatalf("want 1787200000, got %d", ts.Unix())
+		}
+	})
+
+	t.Run("matches the full compound worker_id too", func(t *testing.T) {
+		ts, have, err := parseLastSuccessfulSync(data, "Zentrale:NAS01:elw-backup::offsite-push")
+		if err != nil || !have || ts.Unix() != 1787200000 {
+			t.Fatalf("have=%v ts=%d err=%v", have, ts.Unix(), err)
+		}
+	})
+
+	t.Run("running/failed/prunejob are ignored", func(t *testing.T) {
+		// The only OK syncjob for offsite-push is 1787200000/1787100000; the
+		// running (no status), failed, and prunejob entries must not count.
+		ts, _, _ := parseLastSuccessfulSync(data, "offsite-push")
+		if ts.Unix() == 1787124304 || ts.Unix() == 1787126400 {
+			t.Fatal("failed/prunejob leaked into the result")
 		}
 	})
 
 	t.Run("unknown job -> no result", func(t *testing.T) {
 		_, have, err := parseLastSuccessfulSync(data, "nope")
-		if err != nil {
-			t.Fatalf("err=%v", err)
-		}
-		if have {
-			t.Fatal("want no result")
+		if err != nil || have {
+			t.Fatalf("have=%v err=%v", have, err)
 		}
 	})
 
