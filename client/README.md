@@ -38,65 +38,66 @@ Without Docker, using a local Go toolchain:
 
     CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pbs-auth-client .
 
-## Installation via APT repository (recommended for PBS 4.x)
+## Installation
+
+> On a PBS you operate as **root**, so the commands below use **no `sudo`**.
+
+### Option A — APT repository (recommended for PBS 4.x)
 Add the signed APT repo once; `apt upgrade` then keeps the client up to date.
 
     curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
-      | gpg --dearmor | sudo tee /usr/share/keyrings/pbs-sync-auth.gpg >/dev/null
+      | gpg --dearmor > /usr/share/keyrings/pbs-sync-auth.gpg
 
     echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
       https://ftaeger.github.io/pbs-sync-auth stable main" \
-      | sudo tee /etc/apt/sources.list.d/pbs-sync-auth.list
+      > /etc/apt/sources.list.d/pbs-sync-auth.list
 
-    sudo apt update && sudo apt install pbs-sync-auth-client
+    apt update && apt install pbs-sync-auth-client
 
-Then configure it (same as below): edit `/etc/pbs-sync-auth/client.conf`, place
-`/etc/pbs-sync-auth/secret.key`, and `systemctl enable --now pbs-sync-auth.timer`.
 The repo is rebuilt and signed by CI on each release; see
-[`../packaging/README.md`](../packaging/README.md).
+[`../packaging/README.md`](../packaging/README.md). Then *Configure and enable*
+below.
 
-## Installation via a single Debian package
+### Option B — a single Debian package
 If you prefer not to add a repo, a prebuilt `.deb` (amd64) is attached to each
 GitHub release. It installs the binary to `/usr/bin/pbs-auth-client`, the systemd
 `.service`/`.timer`, and a config file at `/etc/pbs-sync-auth/client.conf`. The
-shared secret is **not** shipped — you provide it yourself. The package does
-**not** start the timer; you enable it once configured.
+shared secret is **not** shipped, and the package does **not** start the timer.
 
-    sudo apt install ./pbs-sync-auth-client_X.Y.Z_amd64.deb
-
-    # 1) adjust the config (at least PBS_AUTH_URL and PBS_SYNC_JOB)
-    sudo $EDITOR /etc/pbs-sync-auth/client.conf
-
-    # 2) place the shared secret (identical to the server's key)
-    openssl rand -hex 32 | sudo tee /etc/pbs-sync-auth/secret.key >/dev/null
-    sudo chmod 600 /etc/pbs-sync-auth/secret.key
-
-    # 3) enable and start the timer
-    sudo systemctl enable --now pbs-sync-auth.timer
+    apt install ./pbs-sync-auth-client_X.Y.Z_amd64.deb
 
 Config edits in `/etc/pbs-sync-auth/client.conf` survive package upgrades (it is a
-dpkg conffile). The `.deb` is built by CI from `packaging/` — see
-[`../packaging/README.md`](../packaging/README.md) to build one locally.
+dpkg conffile).
 
-## Manual installation on the PBS
-    sudo cp pbs-auth-client /usr/local/bin/ && sudo chmod +x /usr/local/bin/pbs-auth-client
+### Configure and enable (Option A or B)
 
-Place the shared secret (identical to the server's, see the target docs):
+    # 1) adjust the config (at least PBS_AUTH_URL and PBS_SYNC_JOB)
+    $EDITOR /etc/pbs-sync-auth/client.conf
 
-    sudo mkdir -p /etc/pbs-sync-auth
-    sudo cp secret.key /etc/pbs-sync-auth/secret.key
-    sudo chmod 600 /etc/pbs-sync-auth/secret.key
+    # 2) install the shared secret — the SAME secret.key as on the server
+    install -m 600 secret.key /etc/pbs-sync-auth/secret.key
 
-systemd timer:
+    # 3) enable and start the 30-min timer
+    systemctl enable --now pbs-sync-auth.timer
 
-    sudo cp systemd/pbs-sync-auth.service systemd/pbs-sync-auth.timer /etc/systemd/system/
-    sudo systemctl daemon-reload
-    sudo systemctl enable --now pbs-sync-auth.timer
+Verify a manual run:
 
-Manual test:
-
-    sudo systemctl start pbs-sync-auth.service
+    systemctl start pbs-sync-auth.service
     journalctl -u pbs-sync-auth.service -n 20
+
+### Option C — manual, without a package
+Install the binary, secret and systemd units by hand:
+
+    install -m 0755 pbs-auth-client /usr/local/bin/pbs-auth-client
+    mkdir -p /etc/pbs-sync-auth
+    install -m 600 secret.key /etc/pbs-sync-auth/secret.key   # same as the server's
+    cp systemd/pbs-sync-auth.service systemd/pbs-sync-auth.timer /etc/systemd/system/
+    systemctl daemon-reload
+    systemctl enable --now pbs-sync-auth.timer
+
+The bundled unit carries its configuration inline (no `client.conf`): edit the
+`Environment=` lines in `pbs-sync-auth.service` to set `PBS_AUTH_URL`,
+`PBS_SYNC_JOB`, etc. (see *Configuration* below).
 
 ## Configuration (environment, set in pbs-sync-auth.service)
     PBS_AUTH_URL        https://pbs-sync-auth.example.com   (http:// also supported)

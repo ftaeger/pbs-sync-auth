@@ -21,15 +21,17 @@ Proxmox Backup Server (Debian 13 / amd64). Add it once, then updates arrive via
 <code>apt upgrade</code>.</p>
 
 <h2>Setup on the PBS</h2>
+<p>On a PBS you operate as <strong>root</strong>, so these commands use no
+<code>sudo</code>.</p>
 <pre>curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
-  | gpg --dearmor | sudo tee /usr/share/keyrings/pbs-sync-auth.gpg >/dev/null
+  | gpg --dearmor > /usr/share/keyrings/pbs-sync-auth.gpg
 
 echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
   https://ftaeger.github.io/pbs-sync-auth stable main" \
-  | sudo tee /etc/apt/sources.list.d/pbs-sync-auth.list
+  > /etc/apt/sources.list.d/pbs-sync-auth.list
 
-sudo apt update
-sudo apt install pbs-sync-auth-client</pre>
+apt update
+apt install pbs-sync-auth-client</pre>
 
 <p>After installing, place the shared secret and enable the timer as described in
 the <a href="https://github.com/ftaeger/pbs-sync-auth">project README</a>.</p>

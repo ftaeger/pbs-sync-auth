@@ -1,0 +1,44 @@
+# pbs-sync-auth behind nginx, TLS terminated by nginx (bring your own certificate).
+#
+# Unlike the Traefik example, nginx does not obtain certificates itself — you
+# provide them (Let's Encrypt via certbot, an existing wildcard, an internal CA,
+# or a self-signed cert for testing). See README.md.
+#
+# Requirements:
+#   - ./secret.key present:  openssl rand -hex 32 > secret.key
+#   - ./certs/fullchain.pem and ./certs/privkey.pem present
+#   - cp .env.example .env   # set DOMAIN
+#
+# Usage:
+#   docker compose up -d
+
+services:
+  nginx:
+    image: nginx:1.27
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Substituted into templates/default.conf.template on container start.
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./templates:/etc/nginx/templates:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - pbs-sync-auth
+
+  pbs-sync-auth:
+    image: ghcr.io/ftaeger/pbs-sync-auth:latest
+    restart: unless-stopped
+    # No published ports: only reachable through nginx on the internal network.
+    environment:
+      PBS_AUTH_HOST: "0.0.0.0"
+      PBS_AUTH_PORT: "8099"
+      PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+    volumes:
+      # Shared secret, mounted read-only. Identical to the client's secret.
+      - ./secret.key:/run/secrets/pbs_auth_secret:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

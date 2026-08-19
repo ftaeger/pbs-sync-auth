@@ -1,0 +1,36 @@
+# pbs-sync-auth behind Envoy, TLS terminated by Envoy (bring your own certificate).
+#
+# Requirements:
+#   - ./secret.key present:  openssl rand -hex 32 > secret.key
+#   - ./certs/fullchain.pem and ./certs/privkey.pem present
+#
+# Usage:
+#   docker compose up -d
+
+services:
+  envoy:
+    image: envoyproxy/envoy:v1.31-latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./envoy.yaml:/etc/envoy/envoy.yaml:ro
+      - ./certs:/etc/envoy/certs:ro
+    depends_on:
+      - pbs-sync-auth
+
+  pbs-sync-auth:
+    image: ghcr.io/ftaeger/pbs-sync-auth:latest
+    restart: unless-stopped
+    # No published ports: only reachable through Envoy on the internal network.
+    environment:
+      PBS_AUTH_HOST: "0.0.0.0"
+      PBS_AUTH_PORT: "8099"
+      PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+    volumes:
+      # Shared secret, mounted read-only. Identical to the client's secret.
+      - ./secret.key:/run/secrets/pbs_auth_secret:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
