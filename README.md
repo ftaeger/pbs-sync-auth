@@ -1,6 +1,9 @@
 # pbs-sync-auth
 
 [![Build & Release](https://github.com/ftaeger/pbs-sync-auth/actions/workflows/build.yml/badge.svg)](https://github.com/ftaeger/pbs-sync-auth/actions/workflows/build.yml)
+[![Latest release](https://img.shields.io/github/v/release/ftaeger/pbs-sync-auth?sort=semver)](https://github.com/ftaeger/pbs-sync-auth/releases)
+[![Container image](https://img.shields.io/badge/ghcr.io-pbs--sync--auth-2496ED?logo=docker&logoColor=white)](https://github.com/ftaeger/pbs-sync-auth/pkgs/container/pbs-sync-auth)
+[![License: MIT](https://img.shields.io/github/license/ftaeger/pbs-sync-auth)](LICENSE)
 
 A small authentication gatekeeper that lets a **Proxmox Backup Server (PBS)** run
 its offsite **push sync** *only* when it can reach — and cryptographically verify
@@ -27,13 +30,28 @@ Both programs use the **Go standard library only** — no external modules.
 
 ## Data flow
 
-    [systemd timer] -> client (source PBS)
-        --HTTP/JSON--> server (auth host)          [mutual authentication]
-        on OK: client runs `proxmox-backup-manager sync-job run <job>` locally
-        --> PBS push sync source -> target (separate, fingerprint-pinned TLS, port 8007)
+```mermaid
+flowchart LR
+    T(["systemd timer<br/>every 30 min"]) --> C
 
-The auth service transfers **no** backup data. The actual transfer runs
-separately over the PBS-native TLS connection, pinned by fingerprint.
+    subgraph SRC ["Source PBS"]
+        C["pbs-auth-client"]
+        J["proxmox-backup-manager<br/>sync-job run"]
+        C -->|"auth OK"| J
+    end
+
+    subgraph AUTH ["Auth host"]
+        V["pbs-sync-auth server"]
+    end
+
+    C <-->|"HTTP / JSON<br/>mutual HMAC auth"| V
+    J ==>|"PBS push sync<br/>fingerprint-pinned TLS · :8007"| TGT[("Target PBS")]
+```
+
+The thin link is the **auth handshake** (HTTP/JSON, mutual HMAC); the thick link
+is the **actual backup transfer**, which goes straight from source to target over
+the PBS-native, fingerprint-pinned TLS connection. The auth service transfers
+**no** backup data — it only decides whether the push may run.
 
 ## Protocol
 
@@ -88,10 +106,12 @@ Run the published multi-arch image (x86_64 / arm64 / armv7, incl. Raspberry Pi
       --read-only --security-opt no-new-privileges \
       ghcr.io/ftaeger/pbs-sync-auth:latest
 
-The server speaks plain HTTP on `:8099`; put a reverse proxy in front for TLS. A
-ready-to-use Traefik + Let's Encrypt setup (HTTP-01 or Cloudflare DNS-01) is in
-[`examples/traefik/`](examples/traefik/); a standalone binary + systemd variant is
-in [`server/README.md`](server/README.md).
+The server speaks plain HTTP on `:8099`; put a reverse proxy in front for TLS.
+Ready-to-use reverse-proxy examples are in [`examples/`](examples/): **Traefik**
+(automatic Let's Encrypt, HTTP-01 or Cloudflare DNS-01) plus **nginx**, **Caddy**,
+**HAProxy**, **Apache httpd** and **Envoy** (TLS termination, bring your own
+certificate). A standalone binary + systemd variant is in
+[`server/README.md`](server/README.md).
 
 ### 3. Client (source PBS)
 

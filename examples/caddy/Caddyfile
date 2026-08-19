@@ -1,0 +1,8 @@
+# {$DOMAIN} is taken from the environment (set in .env).
+# Caddy serves HTTPS on :443 with the provided certificate and automatically
+# redirects HTTP (:80) to HTTPS.
+
+{$DOMAIN} {
+	tls /etc/caddy/certs/fullchain.pem /etc/caddy/certs/privkey.pem
+	reverse_proxy pbs-sync-auth:8099
+}

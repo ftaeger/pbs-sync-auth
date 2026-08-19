@@ -13,6 +13,9 @@ letsencrypt/
 acme.json
 .env
 
+# nginx example: bring-your-own TLS certificate material
+certs/
+
 # OS cruft
 .DS_Store
 

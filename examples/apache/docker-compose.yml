@@ -1,0 +1,39 @@
+# pbs-sync-auth behind Apache httpd, TLS terminated by Apache (bring your own cert).
+#
+# Requirements:
+#   - ./secret.key present:  openssl rand -hex 32 > secret.key
+#   - ./certs/fullchain.pem and ./certs/privkey.pem present
+#   - cp .env.example .env   # set DOMAIN
+#
+# Usage:
+#   docker compose up -d
+
+services:
+  apache:
+    image: httpd:2.4
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./httpd.conf:/usr/local/apache2/conf/httpd.conf:ro
+      - ./certs:/usr/local/apache2/certs:ro
+    depends_on:
+      - pbs-sync-auth
+
+  pbs-sync-auth:
+    image: ghcr.io/ftaeger/pbs-sync-auth:latest
+    restart: unless-stopped
+    # No published ports: only reachable through Apache on the internal network.
+    environment:
+      PBS_AUTH_HOST: "0.0.0.0"
+      PBS_AUTH_PORT: "8099"
+      PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+    volumes:
+      # Shared secret, mounted read-only. Identical to the client's secret.
+      - ./secret.key:/run/secrets/pbs_auth_secret:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
