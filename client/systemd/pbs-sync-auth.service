@@ -1,16 +1,25 @@
 [Unit]
-Description=PBS offsite push (mutual challenge-response auth + sync job)
+Description=PBS offsite push (auth + gated sync-job) daemon
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=simple
 Environment=PBS_AUTH_SECRET=/etc/pbs-sync-auth/secret.key
 Environment=PBS_AUTH_URL=https://pbs-sync-auth.example.com
 Environment=PBS_SYNC_JOB=offsite-push
+# How often to run a cycle, and the minimum time between successful syncs
+# (0 = sync on every successful check).
+Environment=PBS_CHECK_INTERVAL=30m
+Environment=PBS_MIN_BACKUP_INTERVAL=0
 Environment=PBS_AUTH_TIMEOUT=3s
 # TLS (only relevant for https URLs). Defaults verify against the system roots,
 # which is correct for a publicly trusted (e.g. Let's Encrypt) certificate.
 #   Environment=PBS_AUTH_TLS_VERIFY=false                 # test/dev only
 #   Environment=PBS_AUTH_TLS_CA=/etc/pbs-sync-auth/ca.pem # trust an internal CA
 ExecStart=/usr/local/bin/pbs-auth-client
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

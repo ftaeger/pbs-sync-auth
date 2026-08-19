@@ -35,7 +35,6 @@ install -m 0755 "$bin" "$stage/usr/bin/pbs-auth-client"
 
 install -d -m 0755 "$stage/lib/systemd/system"
 install -m 0644 "$src/pbs-sync-auth.service" "$stage/lib/systemd/system/pbs-sync-auth.service"
-install -m 0644 "$src/pbs-sync-auth.timer"   "$stage/lib/systemd/system/pbs-sync-auth.timer"
 
 install -d -m 0755 "$stage/etc/pbs-sync-auth"
 install -m 0644 "$src/client.conf" "$stage/etc/pbs-sync-auth/client.conf"

@@ -1,7 +1,8 @@
 #!/bin/sh
-# Post-installation: ensure the config directory exists and reload systemd.
-# The timer is deliberately NOT enabled/started here — the operator must first
-# place the shared secret and adjust the configuration.
+# Post-installation: ensure the config directory exists, reload systemd, and (on
+# upgrade from the old timer-based layout) retire the timer. The service is
+# deliberately NOT enabled/started here — the operator must first place the shared
+# secret and adjust the configuration.
 set -e
 
 case "$1" in
@@ -10,20 +11,24 @@ case "$1" in
     [ -d /etc/pbs-sync-auth ] || mkdir -p /etc/pbs-sync-auth
 
     if [ -d /run/systemd/system ]; then
+      # Migrate away from the previous timer-based layout, if present.
+      systemctl disable --now pbs-sync-auth.timer >/dev/null 2>&1 || true
       systemctl daemon-reload || true
     fi
 
-    # Only on a fresh install ($2 empty), print activation instructions.
+    # Only on a fresh install ($2 empty), print activation instructions
+    # (a PBS runs as root, so no sudo).
     if [ -z "$2" ]; then
       cat <<'EOF'
 
 pbs-sync-auth-client installed. To activate the offsite push:
-  1. Adjust /etc/pbs-sync-auth/client.conf (at least PBS_AUTH_URL and PBS_SYNC_JOB).
+  1. Adjust /etc/pbs-sync-auth/client.conf (PBS_AUTH_URL, PBS_SYNC_JOB,
+     and optionally PBS_CHECK_INTERVAL / PBS_MIN_BACKUP_INTERVAL).
   2. Create the shared secret (identical to the server's key):
-       openssl rand -hex 32 | sudo tee /etc/pbs-sync-auth/secret.key >/dev/null
-       sudo chmod 600 /etc/pbs-sync-auth/secret.key
-  3. Enable and start the timer:
-       sudo systemctl enable --now pbs-sync-auth.timer
+       openssl rand -hex 32 > /etc/pbs-sync-auth/secret.key
+       chmod 600 /etc/pbs-sync-auth/secret.key
+  3. Enable and start the daemon:
+       systemctl enable --now pbs-sync-auth.service
 
 EOF
     fi
