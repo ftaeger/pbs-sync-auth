@@ -22,8 +22,8 @@ Both programs use the **Go standard library only** — no external modules.
 
 ## Components
 
-    client/   Go binary on the source PBS, run by a systemd timer (every 30 min).
-              On successful auth: `proxmox-backup-manager sync-job run <job>`.
+    client/   Go daemon on the source PBS (systemd service). On each interval, on
+              successful auth: `proxmox-backup-manager sync-job run <job>`.
     server/   Go HTTP service, runs as a Docker container on a host reachable
               by the source PBS.
     docs/     PBS-side setup guides (source and target).
@@ -32,7 +32,7 @@ Both programs use the **Go standard library only** — no external modules.
 
 ```mermaid
 flowchart LR
-    T(["systemd timer<br/>every 30 min"]) --> C
+    T(["check cycle<br/>every PBS_CHECK_INTERVAL"]) --> C
 
     subgraph SRC ["Source PBS"]
         C["pbs-auth-client"]
@@ -106,6 +106,11 @@ Run the published multi-arch image (x86_64 / arm64 / armv7, incl. Raspberry Pi
       --read-only --security-opt no-new-privileges \
       ghcr.io/ftaeger/pbs-sync-auth:latest
 
+Optionally add `-e PBS_TARGET_URL=https://pbs-target.example.com:8007` so the
+server only returns OK once the target PBS API is reachable — otherwise the client
+skips the sync and logs that the central PBS is unavailable (see
+[`server/README.md`](server/README.md)).
+
 The server speaks plain HTTP on `:8099`; put a reverse proxy in front for TLS.
 Ready-to-use reverse-proxy examples are in [`examples/`](examples/): **Traefik**
 (automatic Let's Encrypt, HTTP-01 or Cloudflare DNS-01) plus **nginx**, **Caddy**,
@@ -142,19 +147,20 @@ Download `pbs-sync-auth-client_X.Y.Z_amd64.deb` from the
 
 **Configure and enable (both options)**
 
-    # 1) point the client at your auth server and sync job
-    $EDITOR /etc/pbs-sync-auth/client.conf        # PBS_AUTH_URL, PBS_SYNC_JOB, …
+    # 1) configure: auth server, sync job, and how often to check / back up
+    $EDITOR /etc/pbs-sync-auth/client.conf
+    #   PBS_AUTH_URL, PBS_SYNC_JOB, PBS_CHECK_INTERVAL, PBS_MIN_BACKUP_INTERVAL
 
     # 2) install the shared secret (the SAME secret.key as on the server)
     install -m 600 secret.key /etc/pbs-sync-auth/secret.key
 
-    # 3) enable the 30-min timer
-    systemctl enable --now pbs-sync-auth.timer
+    # 3) enable and start the daemon
+    systemctl enable --now pbs-sync-auth.service
 
-Verify a manual run:
+Watch it:
 
-    systemctl start pbs-sync-auth.service
-    journalctl -u pbs-sync-auth.service -n 20
+    systemctl status pbs-sync-auth.service
+    journalctl -u pbs-sync-auth.service -f
 
 The PBS-side setup (remote, push sync job, permissions) is in
 [`docs/pbs-source.md`](docs/pbs-source.md) (source) and
@@ -164,13 +170,18 @@ The PBS-side setup (remote, push sync job, permissions) is in
 
 Environment variables (see the component READMEs for defaults):
 
-    PBS_AUTH_SECRET     path to the shared secret (default /etc/pbs-sync-auth/secret.key)
-    PBS_AUTH_URL        client: auth server base URL (http:// or https://)
-    PBS_AUTH_PORT       server: listen port (default 8099)
-    PBS_SYNC_JOB        client: PBS sync job to run (default offsite-push)
-    PBS_AUTH_TIMEOUT    client: HTTP timeout (default 3s)
-    PBS_AUTH_TLS_VERIFY client: verify the server cert on https (default true)
-    PBS_AUTH_TLS_CA     client: optional PEM CA bundle to trust (internal CA)
+    PBS_AUTH_SECRET         path to the shared secret (default /etc/pbs-sync-auth/secret.key)
+    PBS_AUTH_URL            client: auth server base URL (http:// or https://)
+    PBS_AUTH_PORT           server: listen port (default 8099)
+    PBS_SYNC_JOB            client: PBS sync job to run (default offsite-push)
+    PBS_CHECK_INTERVAL      client: how often the daemon runs a cycle (default 30m)
+    PBS_MIN_BACKUP_INTERVAL client: min time between successful syncs (default 0 = every check)
+    PBS_AUTH_TIMEOUT        client: HTTP timeout (default 3s)
+    PBS_AUTH_TLS_VERIFY     client: verify the server cert on https (default true)
+    PBS_AUTH_TLS_CA         client: optional PEM CA bundle to trust (internal CA)
+    PBS_TARGET_URL          server: optional target-PBS reachability gate (e.g.
+                            https://pbs-target.example.com:8007; unset = disabled)
+    PBS_TARGET_TIMEOUT      server: probe timeout for the gate (default 3s)
 
 ## TLS (defense in depth)
 

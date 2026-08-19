@@ -1,12 +1,17 @@
 [Unit]
-Description=PBS offsite push (mutual challenge-response auth + sync job)
+Description=PBS offsite push (auth + gated sync-job) daemon
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=oneshot
+Type=simple
 # Configuration lives in a conffile so operator edits survive package upgrades.
 # The shared secret is referenced by path (PBS_AUTH_SECRET) and read by the
 # client itself, so it never enters the process environment.
 EnvironmentFile=/etc/pbs-sync-auth/client.conf
 ExecStart=/usr/bin/pbs-auth-client
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

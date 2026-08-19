@@ -6,23 +6,22 @@ packaged; the server is deployed as a container (see [`../server/`](../server/))
 
 ## Installed layout
     /usr/bin/pbs-auth-client                    client binary
-    /lib/systemd/system/pbs-sync-auth.service   oneshot: auth + sync-job run
-    /lib/systemd/system/pbs-sync-auth.timer     every 30 min
+    /lib/systemd/system/pbs-sync-auth.service   daemon: auth + gated sync-job
     /etc/pbs-sync-auth/client.conf              config (dpkg conffile, EnvironmentFile)
 
 The shared secret (`/etc/pbs-sync-auth/secret.key`) is **not** shipped: it is
 operator-provided, read by the client from disk (never placed in the process
 environment), and left untouched even on `purge`. The package **does not** enable
-or start the timer — the operator does that once the secret and config are in
-place (see [`../client/README.md`](../client/README.md)).
+or start the service — the operator does that once the secret and config are in
+place (see [`../client/README.md`](../client/README.md)). Upgrading from an older
+timer-based package retires the timer automatically.
 
 ## Layout of this directory
     debian/control                template (@VERSION@ / @ARCH@ substituted at build)
     debian/conffiles              marks /etc/pbs-sync-auth/client.conf as a conffile
     debian/client.conf            shipped config defaults
-    debian/pbs-sync-auth.service  EnvironmentFile-based unit, ExecStart=/usr/bin/...
-    debian/pbs-sync-auth.timer
-    debian/postinst|prerm|postrm  maintainer scripts (daemon-reload, activation hint)
+    debian/pbs-sync-auth.service  daemon unit (EnvironmentFile), ExecStart=/usr/bin/...
+    debian/postinst|prerm|postrm  maintainer scripts (daemon-reload, migration, hint)
     build-deb.sh                  assembles the tree and runs dpkg-deb
 
 ## Build

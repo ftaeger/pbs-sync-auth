@@ -66,9 +66,22 @@ Build a multi-arch image with buildx:
       -t pbs-auth-server:latest .
 
 ## Configuration (environment)
-    PBS_AUTH_HOST     0.0.0.0
-    PBS_AUTH_PORT     8099
-    PBS_AUTH_SECRET   /run/secrets/pbs_auth_secret   (file mounted read-only)
+    PBS_AUTH_HOST      0.0.0.0
+    PBS_AUTH_PORT      8099
+    PBS_AUTH_SECRET    /run/secrets/pbs_auth_secret   (file mounted read-only)
+    PBS_TARGET_URL     (unset) optional target-PBS reachability gate, e.g.
+                       https://pbs-target.example.com:8007
+    PBS_TARGET_TIMEOUT 3s      probe timeout for the gate
+
+## Target-PBS reachability gate (optional)
+If `PBS_TARGET_URL` is set, then after a client has authenticated the server
+probes the target PBS API (`<PBS_TARGET_URL>/api2/json/version`, TLS verification
+disabled — a liveness check only; the real push is separately fingerprint-pinned).
+If the target does not answer, `/auth/verify` returns
+`{"status":"target_unavailable","message":...}` instead of `{"status":"ok"}`, so
+the client skips the sync and logs the reason. Unset → the gate is disabled and
+the server behaves as an auth-only gatekeeper. The target status is only revealed
+**after** successful client authentication.
 
 ## Test
     curl -s -X POST http://localhost:8099/auth/challenge \
