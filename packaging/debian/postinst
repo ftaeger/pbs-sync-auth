@@ -11,9 +11,24 @@ case "$1" in
     [ -d /etc/pbs-sync-auth ] || mkdir -p /etc/pbs-sync-auth
 
     if [ -d /run/systemd/system ]; then
-      # Migrate away from the previous timer-based layout, if present.
+      # If upgrading from the old timer-based layout, carry the operator's
+      # enabled/active choice over to the new daemon service so the offsite push
+      # keeps running instead of silently stopping.
+      migrate=no
+      if systemctl is-enabled pbs-sync-auth.timer >/dev/null 2>&1 \
+         || systemctl is-active pbs-sync-auth.timer >/dev/null 2>&1; then
+        migrate=yes
+      fi
       systemctl disable --now pbs-sync-auth.timer >/dev/null 2>&1 || true
       systemctl daemon-reload || true
+      if [ "$migrate" = yes ]; then
+        echo "pbs-sync-auth: migrating the timer to the pbs-sync-auth.service daemon."
+        systemctl enable --now pbs-sync-auth.service >/dev/null 2>&1 || true
+      else
+        # Plain daemon-version upgrade: restart if it was already running so the
+        # new binary takes effect (no-op on a fresh install).
+        systemctl try-restart pbs-sync-auth.service >/dev/null 2>&1 || true
+      fi
     fi
 
     # Only on a fresh install ($2 empty), print activation instructions

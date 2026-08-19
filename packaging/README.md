@@ -14,7 +14,9 @@ operator-provided, read by the client from disk (never placed in the process
 environment), and left untouched even on `purge`. The package **does not** enable
 or start the service — the operator does that once the secret and config are in
 place (see [`../client/README.md`](../client/README.md)). Upgrading from an older
-timer-based package retires the timer automatically.
+timer-based package retires the timer and, if it was enabled, migrates that state
+to the new daemon service (so the push keeps running); later daemon-to-daemon
+upgrades restart a running service to load the new binary.
 
 ## Layout of this directory
     debian/control                template (@VERSION@ / @ARCH@ substituted at build)
