@@ -14,8 +14,16 @@ Counterpart (server): see [`../server/`](../server/).
     main.go                       Go client (standard library only)
     go.mod
     build-with-docker.sh          builds a static linux/amd64 binary via Docker
-    systemd/pbs-sync-auth.service  oneshot: auth + sync-job run
-    systemd/pbs-sync-auth.timer    checks every 30 min
+    systemd/pbs-sync-auth.service  long-running daemon: auth + gated sync-job
+
+## How it runs
+The client is a long-running daemon. Every `PBS_CHECK_INTERVAL` it authenticates
+against the server; if the server reports the target PBS is unavailable it logs
+the reason and skips. Otherwise it starts the push sync job — but only if a backup
+is **due** (`PBS_MIN_BACKUP_INTERVAL` since the last successful sync, queried from
+PBS) and none of its own runs is in progress (it runs the job synchronously, so it
+never overlaps itself). `pbs-auth-client --once` runs a single cycle and exits (see
+*Exit codes*), handy for testing.
 
 ## Protocol
 1. Client -> server  POST /auth/challenge {client_nonce}
@@ -61,8 +69,8 @@ below.
 ### Option B — a single Debian package
 If you prefer not to add a repo, a prebuilt `.deb` (amd64) is attached to each
 GitHub release. It installs the binary to `/usr/bin/pbs-auth-client`, the systemd
-`.service`/`.timer`, and a config file at `/etc/pbs-sync-auth/client.conf`. The
-shared secret is **not** shipped, and the package does **not** start the timer.
+`.service`, and a config file at `/etc/pbs-sync-auth/client.conf`. The shared
+secret is **not** shipped, and the package does **not** start the service.
 
     apt install ./pbs-sync-auth-client_X.Y.Z_amd64.deb
 
@@ -71,41 +79,47 @@ dpkg conffile).
 
 ### Configure and enable (Option A or B)
 
-    # 1) adjust the config (at least PBS_AUTH_URL and PBS_SYNC_JOB)
+    # 1) adjust the config (PBS_AUTH_URL, PBS_SYNC_JOB, and optionally the
+    #    PBS_CHECK_INTERVAL / PBS_MIN_BACKUP_INTERVAL below)
     $EDITOR /etc/pbs-sync-auth/client.conf
 
     # 2) install the shared secret — the SAME secret.key as on the server
     install -m 600 secret.key /etc/pbs-sync-auth/secret.key
 
-    # 3) enable and start the 30-min timer
-    systemctl enable --now pbs-sync-auth.timer
+    # 3) enable and start the daemon
+    systemctl enable --now pbs-sync-auth.service
 
-Verify a manual run:
+Watch it:
 
-    systemctl start pbs-sync-auth.service
-    journalctl -u pbs-sync-auth.service -n 20
+    systemctl status pbs-sync-auth.service
+    journalctl -u pbs-sync-auth.service -f
 
 ### Option C — manual, without a package
-Install the binary, secret and systemd units by hand:
+Install the binary, secret and the systemd unit by hand:
 
     install -m 0755 pbs-auth-client /usr/local/bin/pbs-auth-client
     mkdir -p /etc/pbs-sync-auth
     install -m 600 secret.key /etc/pbs-sync-auth/secret.key   # same as the server's
-    cp systemd/pbs-sync-auth.service systemd/pbs-sync-auth.timer /etc/systemd/system/
+    cp systemd/pbs-sync-auth.service /etc/systemd/system/
     systemctl daemon-reload
-    systemctl enable --now pbs-sync-auth.timer
+    systemctl enable --now pbs-sync-auth.service
 
 The bundled unit carries its configuration inline (no `client.conf`): edit the
 `Environment=` lines in `pbs-sync-auth.service` to set `PBS_AUTH_URL`,
 `PBS_SYNC_JOB`, etc. (see *Configuration* below).
 
-## Configuration (environment, set in pbs-sync-auth.service)
-    PBS_AUTH_URL        https://pbs-sync-auth.example.com   (http:// also supported)
-    PBS_AUTH_SECRET     /etc/pbs-sync-auth/secret.key
-    PBS_AUTH_TIMEOUT    3s
-    PBS_SYNC_JOB        offsite-push
-    PBS_AUTH_TLS_VERIFY true    verify the server certificate (https only); false = test/dev only
-    PBS_AUTH_TLS_CA     (unset) optional PEM CA bundle to trust instead of the system roots
+## Configuration (client.conf / Environment= in pbs-sync-auth.service)
+    PBS_AUTH_URL            https://pbs-sync-auth.example.com   (http:// also supported)
+    PBS_AUTH_SECRET         /etc/pbs-sync-auth/secret.key
+    PBS_AUTH_TIMEOUT        3s
+    PBS_SYNC_JOB            offsite-push
+    PBS_CHECK_INTERVAL      30m     how often the daemon runs a cycle
+    PBS_MIN_BACKUP_INTERVAL 0       min time between successful syncs (0 = every check)
+    PBS_AUTH_TLS_VERIFY     true    verify the server certificate (https only); false = test/dev only
+    PBS_AUTH_TLS_CA         (unset) optional PEM CA bundle to trust instead of the system roots
+
+Example: check every 2 h but back up at most every 12 h →
+`PBS_CHECK_INTERVAL=2h`, `PBS_MIN_BACKUP_INTERVAL=12h`.
 
 ### TLS
 When `PBS_AUTH_URL` is an `https://` URL, the TLS handshake is the **first gate**:
@@ -116,10 +130,14 @@ Encrypt via the [Traefik example](../examples/traefik/)) needs no extra config.
 disables verification and is meant for testing only. The mutual HMAC
 authentication always runs *in addition* to the TLS check (defense in depth).
 
-## Exit codes
-    0  auth ok, sync job started
+## Exit codes (`--once` mode)
+    0  synced, or skipped because a backup was not yet due
     1  auth server unreachable / auth failed (sync skipped)
     2  auth ok, but `sync-job run` failed
+    3  auth ok, but the target PBS is unavailable (sync skipped)
+
+As a daemon the client does not exit per cycle — it logs the same outcomes to the
+journal and continues.
 
 ## PBS-side setup
 Remote, push sync job and permissions on the source PBS:

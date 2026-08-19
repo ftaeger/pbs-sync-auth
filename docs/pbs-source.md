@@ -57,26 +57,33 @@ Optional bandwidth limit (push uses `rate-out`):
 The job ID `offsite-push` must match `PBS_SYNC_JOB` in the auth client.
 
 ## 3. Install the auth client
-Build and install the binary, place the secret, enable the systemd timer:
-see [`../client/README.md`](../client/README.md). In short:
+Recommended: add the signed APT repo and install (a PBS runs as root, so no
+`sudo`) — full details in [`../client/README.md`](../client/README.md):
 
-    cd ../client
-    ./build-with-docker.sh
-    sudo cp pbs-auth-client /usr/local/bin/ && sudo chmod +x /usr/local/bin/pbs-auth-client
-    sudo mkdir -p /etc/pbs-sync-auth
-    sudo cp secret.key /etc/pbs-sync-auth/secret.key && sudo chmod 600 /etc/pbs-sync-auth/secret.key
-    sudo cp systemd/pbs-sync-auth.service systemd/pbs-sync-auth.timer /etc/systemd/system/
-    sudo systemctl daemon-reload && sudo systemctl enable --now pbs-sync-auth.timer
+    curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
+      | gpg --dearmor > /usr/share/keyrings/pbs-sync-auth.gpg
+    echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
+      https://ftaeger.github.io/pbs-sync-auth stable main" \
+      > /etc/apt/sources.list.d/pbs-sync-auth.list
+    apt update && apt install pbs-sync-auth-client
+
+    $EDITOR /etc/pbs-sync-auth/client.conf     # PBS_AUTH_URL, PBS_SYNC_JOB, intervals
+    install -m 600 secret.key /etc/pbs-sync-auth/secret.key   # same key as the server
+    systemctl enable --now pbs-sync-auth.service
 
 ## 4. Flow
-The timer starts the client every 30 min. The client:
+The client runs as a daemon. Every `PBS_CHECK_INTERVAL` it:
 1. runs the mutual challenge-response against the auth server,
 2. only continues if the server is genuine AND the client is authorized (both
    proofs valid),
-3. then runs `proxmox-backup-manager sync-job run offsite-push`.
+3. if the server has a target-PBS gate enabled and the target is down, logs the
+   reason and skips,
+4. otherwise, if a backup is due (`PBS_MIN_BACKUP_INTERVAL` since the last
+   successful sync) and none of its own runs is in progress, runs
+   `proxmox-backup-manager sync-job run offsite-push`.
 
-If the source PBS cannot reach the auth server, or auth fails, the push is
-skipped cleanly (exit 1).
+If the source PBS cannot reach the auth server, or auth fails, the push is skipped
+cleanly and the reason is logged to the journal.
 
 ## Note: permissions of the local backups
 If the regular backup job (writing to `source-datastore`) fails on prune with
