@@ -2,6 +2,9 @@ package main
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 )
@@ -250,5 +253,18 @@ func TestExitCodeFor(t *testing.T) {
 		if got := exitCodeFor(outcome); got != want {
 			t.Fatalf("outcome %v: want %d got %d", outcome, want, got)
 		}
+	}
+}
+
+func TestPostResponseLimit(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"server_nonce":"` + strings.Repeat("a", maxResponseBytes) + `"}`))
+	}))
+	defer srv.Close()
+	var out struct {
+		ServerNonce string `json:"server_nonce"`
+	}
+	if err := post(srv.Client(), srv.URL, map[string]string{}, &out); err == nil {
+		t.Fatal("oversized response: want decode error, got nil")
 	}
 }

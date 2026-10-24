@@ -40,5 +40,20 @@ Publicly trusted cert → no extra client config. Internal CA → `PBS_AUTH_TLS_
 self-signed test cert → `PBS_AUTH_TLS_VERIFY=false` (testing only). See the
 [client README](../../client/README.md).
 
+## Rate limiting & client IP
+
+The `local_ratelimit` filter is a single token bucket for the whole listener
+(5 requests/s, burst 20, excess → `429`), **not** per client IP — enough to cap a
+flood, but one noisy source can use up the budget. Per-IP limits in Envoy need
+the global rate-limit service; if your clients have fixed IPs, an
+[RBAC filter](https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_filters/rbac_filter)
+allowlist is the simpler, stronger option.
+
+`use_remote_address: true` makes Envoy append the real client IP to
+`X-Forwarded-For`. The auth server logs every auth result with the client IP (`auth ok for 203.0.113.9`,
+`auth denied for …`). It takes that IP from `X-Forwarded-For` only because the
+compose file sets `PBS_TRUSTED_PROXIES` to Docker's network range; see the
+[server README](../../server/README.md#client-ip-behind-a-reverse-proxy).
+
 `secret.key` and `certs/` are covered by the repository `.gitignore` — never
 commit them.

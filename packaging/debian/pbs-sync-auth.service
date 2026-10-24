@@ -12,6 +12,10 @@ EnvironmentFile=/etc/pbs-sync-auth/client.conf
 ExecStart=/usr/bin/pbs-auth-client
 Restart=always
 RestartSec=30
+# Light hardening. Deliberately no ProtectSystem/ProtectHome: the daemon runs
+# `proxmox-backup-manager` as root, which needs to write PBS state.
+NoNewPrivileges=yes
+PrivateTmp=yes
 
 [Install]
 WantedBy=multi-user.target

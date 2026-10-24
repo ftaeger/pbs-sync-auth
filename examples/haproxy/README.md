@@ -43,5 +43,16 @@ Publicly trusted cert → no extra client config. Internal CA → `PBS_AUTH_TLS_
 self-signed test cert → `PBS_AUTH_TLS_VERIFY=false` (testing only). See the
 [client README](../../client/README.md).
 
+## Rate limiting & client IP
+
+A stick table tracks each client IP; more than 20 requests in 10 s → `429`. A
+source PBS sends 2 requests per check interval, so legitimate clients are never
+affected. If your clients have fixed IPs, also enable the commented `acl` /
+`http-request deny` allowlist. `option forwardfor` passes the client IP on in
+`X-Forwarded-For`. The auth server logs every auth result with the client IP (`auth ok for 203.0.113.9`,
+`auth denied for …`). It takes that IP from `X-Forwarded-For` only because the
+compose file sets `PBS_TRUSTED_PROXIES` to Docker's network range; see the
+[server README](../../server/README.md#client-ip-behind-a-reverse-proxy).
+
 `secret.key` and `certs/` are covered by the repository `.gitignore` — never
 commit them.

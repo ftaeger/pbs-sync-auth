@@ -8,7 +8,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src golang:1.23-alpine \
+docker run --rm --platform linux/amd64 -v "$PWD":/src -w /src golang:1.27-alpine \
     sh -c 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o pbs-auth-client .'
 
 echo "Done: $PWD/pbs-auth-client (linux/amd64)"

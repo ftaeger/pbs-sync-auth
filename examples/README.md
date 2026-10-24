@@ -19,5 +19,21 @@ The "bring your own certificate" examples expect `certs/fullchain.pem` and
 existing Let's Encrypt certificate, an internal CA, or a self-signed cert for
 testing — see each example's README.
 
+Every example also rate-limits the auth endpoints (built-in where the proxy
+supports it; Caddy needs a plugin, Apache a third-party module), offers a
+commented IP allowlist for clients with fixed addresses, and passes the client IP
+in `X-Forwarded-For` so the server can log it (`PBS_TRUSTED_PROXIES`). A source
+PBS sends only 2 requests per check interval, so the limits never affect
+legitimate clients.
+
+| Example | Rate limit | Per client IP |
+|---------|------------|---------------|
+| traefik | `ratelimit` middleware, 1 r/s, burst 5 | yes |
+| nginx | `limit_req`, 1 r/s, burst 5 | yes |
+| haproxy | stick table, > 20 req / 10 s → 429 | yes |
+| envoy | `local_ratelimit`, 5 r/s, burst 20 | no (whole listener) |
+| caddy | needs the `caddy-ratelimit` plugin | yes |
+| apache | not built in (`mod_qos`, fail2ban, or allowlist) | — |
+
 > These compose files are provided as templates. Adapt image versions, hostnames
 > and certificate paths to your environment.

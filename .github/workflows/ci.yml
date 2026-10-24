@@ -1,9 +1,13 @@
 name: CI
 
-# Validate both Go modules on every pull request (fast: fmt, vet, build).
+# Validate both Go modules on every pull request (fmt, vet, test, build, and a
+# govulncheck scan). The weekly schedule re-runs the scan so newly published
+# stdlib vulnerabilities surface even when nothing is merged.
 on:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * 1'
 
 jobs:
   validate:
@@ -12,10 +16,11 @@ jobs:
       matrix:
         module: [client, server]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.23'
+          go-version: '1.27'
+          check-latest: true
       - name: gofmt
         working-directory: ${{ matrix.module }}
         run: |
@@ -26,18 +31,26 @@ jobs:
       - name: go vet
         working-directory: ${{ matrix.module }}
         run: go vet ./...
+      - name: go test
+        working-directory: ${{ matrix.module }}
+        run: go test -race ./...
       - name: go build
         working-directory: ${{ matrix.module }}
         run: go build ./...
+      - name: govulncheck
+        working-directory: ${{ matrix.module }}
+        # Tool only; not a module dependency (the code stays stdlib-only).
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
   package:
     # Sanity-check the Debian packaging so a broken packaging/ fails the PR.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
-          go-version: '1.23'
+          go-version: '1.27'
+          check-latest: true
       - name: Build client binary (amd64)
         env: { CGO_ENABLED: '0', GOOS: linux, GOARCH: amd64 }
         run: go build -C client -ldflags="-s -w" -o "$PWD/pbs-auth-client-linux-amd64" .

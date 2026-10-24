@@ -43,5 +43,18 @@ Publicly trusted cert → no extra client config. Internal CA → `PBS_AUTH_TLS_
 self-signed test cert → `PBS_AUTH_TLS_VERIFY=false` (testing only). See the
 [client README](../../client/README.md).
 
+## Rate limiting & client IP
+
+Apache httpd has no built-in per-IP request rate limit (`mod_ratelimit` only
+throttles bandwidth). Options: the third-party `mod_qos` or `mod_evasive`
+modules, fail2ban on the access log, or — simplest, if your clients have fixed
+IPs — the commented `Require ip` allowlist in `httpd.conf`. Alternatively use one
+of the other examples (nginx, HAProxy, Traefik) which rate-limit natively.
+
+`mod_proxy_http` passes the client IP on in `X-Forwarded-For` automatically. The auth server logs every auth result with the client IP (`auth ok for 203.0.113.9`,
+`auth denied for …`). It takes that IP from `X-Forwarded-For` only because the
+compose file sets `PBS_TRUSTED_PROXIES` to Docker's network range; see the
+[server README](../../server/README.md#client-ip-behind-a-reverse-proxy).
+
 `secret.key` and `certs/` are covered by the repository `.gitignore` — never
 commit them.

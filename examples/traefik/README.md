@@ -48,6 +48,22 @@ client verifies it against the system root CAs — no extra configuration needed
 See the [client README](../../client/README.md) for the `PBS_AUTH_TLS_*` options
 (disabling verification for testing, or trusting an internal CA).
 
+## Rate limiting & client IP
+
+The `pbsauth-ratelimit` middleware limits each client IP to 1 request/s with a
+burst of 5 (excess → `429`). A source PBS sends 2 requests per check interval, so
+legitimate clients are never affected. If your clients have fixed IPs, also
+enable the commented `pbsauth-allow` IP allowlist.
+
+Traefik replaces any client-supplied `X-Forwarded-For` with the real peer
+address (unless `forwardedHeaders.trustedIPs` is configured for an upstream
+proxy/CDN; then also set `ratelimit.sourcecriterion.ipstrategy.depth`).
+
+The server logs every auth result with the client IP (`auth ok for 203.0.113.9`,
+`auth denied for …`). It takes that IP from `X-Forwarded-For` only because the
+compose file sets `PBS_TRUSTED_PROXIES` to Docker's network range; see the
+[server README](../../server/README.md#client-ip-behind-a-reverse-proxy).
+
 ## Notes
 
 - The ACME account and issued certificates are stored in `./letsencrypt/acme.json`

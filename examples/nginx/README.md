@@ -62,6 +62,18 @@ it against the system root CAs — no extra config. For an internal CA use
 `PBS_AUTH_TLS_VERIFY=false` (testing only). See the
 [client README](../../client/README.md).
 
+## Rate limiting & client IP
+
+`limit_req_zone` / `limit_req` limit each client IP to 1 request/s with a burst
+of 5 (excess → `429`). A source PBS sends 2 requests per check interval, so
+legitimate clients are never affected. If your clients have fixed IPs, also
+enable the commented `allow` / `deny` allowlist.
+
+The server logs every auth result with the client IP (`auth ok for 203.0.113.9`,
+`auth denied for …`). It takes that IP from `X-Forwarded-For` only because the
+compose file sets `PBS_TRUSTED_PROXIES` to Docker's network range; see the
+[server README](../../server/README.md#client-ip-behind-a-reverse-proxy).
+
 ## Notes
 
 - `secret.key` and `certs/` are covered by the repository `.gitignore` — never
