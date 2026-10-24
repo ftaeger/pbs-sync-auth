@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Never paste your `secret.key` or any other secret.** Redact host names
+        and IP addresses if you prefer. Security issues go to the
+        [private vulnerability report](https://github.com/ftaeger/pbs-sync-auth/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+    validations:
+      required: true
+  - type: input
+    id: client-version
+    attributes:
+      label: Client version
+      description: "`dpkg -s pbs-sync-auth-client | grep Version` or the release you downloaded"
+  - type: input
+    id: server-version
+    attributes:
+      label: Server version / image tag
+      description: e.g. `ghcr.io/ftaeger/pbs-sync-auth:1.0.0`
+  - type: input
+    id: pbs-version
+    attributes:
+      label: Proxmox Backup Server version
+      description: "`proxmox-backup-manager versions`"
+  - type: dropdown
+    id: install
+    attributes:
+      label: Client installation
+      options: [APT repository, .deb from a release, static binary, built from source]
+  - type: dropdown
+    id: proxy
+    attributes:
+      label: Reverse proxy in front of the server
+      options: [none (plain HTTP), Traefik, nginx, Caddy, HAProxy, Apache httpd, Envoy, other]
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: "Client: `journalctl -u pbs-sync-auth.service`; server: `docker logs <container>`. Redact as needed."
+      render: text

@@ -44,7 +44,7 @@ On a system without `dpkg-deb` (e.g. macOS), run it inside a Debian container:
 # apt/ — signed APT repository (GitHub Pages)
 
 Publishes the client `.deb` in a signed APT repo at
-`https://ftaeger.github.io/pbs-sync-auth/`, so a PBS can `apt install` the client
+`https://apt.pbs-sync-auth.com/`, so a PBS can `apt install` the client
 and get updates via `apt upgrade`. It is rebuilt statelessly from **all** release
 `.deb` assets on each `vX.Y.Z` tag (and on `workflow_dispatch`) by the `apt` job
 in `build.yml`, then deployed to Pages.

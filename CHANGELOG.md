@@ -5,7 +5,7 @@ All notable changes to this project are documented here. The format follows
 [Semantic Versioning](https://semver.org/).
 
 Each release ships the server image (`ghcr.io/ftaeger/pbs-sync-auth`), static
-binaries and the client `.deb` (also via the [APT repository](https://ftaeger.github.io/pbs-sync-auth/)).
+binaries and the client `.deb` (also via the [APT repository](https://apt.pbs-sync-auth.com/)).
 The section for a version is used as the text of its GitHub release.
 
 ## [Unreleased]
@@ -14,6 +14,10 @@ The section for a version is used as the text of its GitHub release.
 - Server image: releases are now also tagged with the floating major tag
   (`:1`), alongside `:X.Y.Z` and `:X.Y`, so you can pin a major line and still
   receive patch and security updates. Docs and examples use `:1`.
+- The APT repository moved to `https://apt.pbs-sync-auth.com/`. The old
+  `https://ftaeger.github.io/pbs-sync-auth/` URL redirects there, so existing
+  sources keep working; updating `/etc/apt/sources.list.d/pbs-sync-auth.list`
+  is recommended.
 - Server image: dropped the redundant `v`-prefixed tag (`:vX.Y.Z`); use
   `:X.Y.Z`. Pre-release tags no longer move `:latest`.
 
@@ -25,6 +29,10 @@ The section for a version is used as the text of its GitHub release.
   the minimum per job; checkouts no longer persist credentials.
 - Added `SECURITY.md` (private vulnerability reporting) and an OpenSSF
   Scorecard workflow.
+
+### Added
+- `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue forms and a pull request
+  template.
 
 ## [1.0.0] - 2026-10-24
 
