@@ -10,6 +10,11 @@ The section for a version is used as the text of its GitHub release.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-24
+
+No changes to the server or client code; the protocol is unchanged. This
+release is about how pbs-sync-auth is built, published and verified.
+
 ### Changed
 - Server image: releases are now also tagged with the floating major tag
   (`:1`), alongside `:X.Y.Z` and `:X.Y`, so you can pin a major line and still
@@ -138,7 +143,8 @@ none. The protocol is unchanged; 1.0.0 clients and servers interoperate with
 - Traefik + Let's Encrypt example (HTTP-01 and Cloudflare DNS-01).
 - PBS source and target setup guides.
 
-[Unreleased]: https://github.com/ftaeger/pbs-sync-auth/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/ftaeger/pbs-sync-auth/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/ftaeger/pbs-sync-auth/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/ftaeger/pbs-sync-auth/compare/v0.0.5...v1.0.0
 [0.0.5]: https://github.com/ftaeger/pbs-sync-auth/compare/v0.0.4...v0.0.5
 [0.0.4]: https://github.com/ftaeger/pbs-sync-auth/compare/v0.0.3...v0.0.4
