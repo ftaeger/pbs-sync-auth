@@ -35,9 +35,20 @@ It runs on **x86_64, arm64 and armv7** — including Raspberry Pi 3/4/5.
       -v "$PWD/secret.key:/run/secrets/pbs_auth_secret:ro" \
       -e PBS_AUTH_SECRET=/run/secrets/pbs_auth_secret \
       --read-only --security-opt no-new-privileges \
-      ghcr.io/ftaeger/pbs-sync-auth:latest
+      ghcr.io/ftaeger/pbs-sync-auth:1
 
-Tags: `latest`, `sha-<short>` (per main commit), and `X.Y.Z` / `vX.Y.Z` (releases).
+Tags:
+
+| Tag            | Moves?   | Contents                                              |
+|----------------|----------|-------------------------------------------------------|
+| `1`            | floating | newest 1.x release — **recommended**, gets all minor and patch/security updates |
+| `1.0`          | floating | newest 1.0.x release — patch/security updates only    |
+| `1.0.0`        | fixed    | exactly this release                                  |
+| `latest`       | floating | newest build of `main` / newest release (may jump majors) |
+| `sha-<short>`  | fixed    | a single `main` commit (for testing)                  |
+
+Floating tags only take effect when you pull again (`docker compose pull &&
+docker compose up -d`, or an updater such as Watchtower).
 
 ### B) Behind Traefik (TLS)
 Ready-to-use `docker-compose` setups with Let's Encrypt (HTTP-01 or Cloudflare

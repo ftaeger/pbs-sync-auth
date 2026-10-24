@@ -24,7 +24,7 @@ services:
       - pbs-sync-auth
 
   pbs-sync-auth:
-    image: ghcr.io/ftaeger/pbs-sync-auth:latest
+    image: ghcr.io/ftaeger/pbs-sync-auth:1
     restart: unless-stopped
     # No published ports: only reachable through Apache on the internal network.
     environment:

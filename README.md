@@ -104,7 +104,11 @@ Run the published multi-arch image (x86_64 / arm64 / armv7, incl. Raspberry Pi
       -v "$PWD/secret.key:/run/secrets/pbs_auth_secret:ro" \
       -e PBS_AUTH_SECRET=/run/secrets/pbs_auth_secret \
       --read-only --security-opt no-new-privileges \
-      ghcr.io/ftaeger/pbs-sync-auth:latest
+      ghcr.io/ftaeger/pbs-sync-auth:1
+
+`:1` follows the newest 1.x release (minor and patch/security updates, no
+breaking changes); pin `:1.0` for patches only or `:1.0.0` for an exact release.
+See [`server/README.md`](server/README.md) for all tags.
 
 Optionally add `-e PBS_TARGET_URL=https://pbs-target.example.com:8007` so the
 server only returns OK once the target PBS API is reachable — otherwise the client
