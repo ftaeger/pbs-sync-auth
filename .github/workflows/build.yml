@@ -134,24 +134,38 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          # The "## [X.Y.Z]" section for this tag, without its heading.
+          awk -v v="${GITHUB_REF_NAME#v}" '
+            /^## \[/ { if (on) exit; on = (index($0, "## [" v "]") == 1); next }
+            /^\[[^]]+\]: / { if (on) exit }
+            on' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for ${GITHUB_REF_NAME#v}"; exit 1
+          fi
+          cat release-notes.md
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Idempotent: on a re-run the release may already exist, so update its
-          # assets instead of failing on `gh release create`.
+          # notes and assets instead of failing on `gh release create`.
           if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+              --notes-file release-notes.md
             gh release upload "${GITHUB_REF_NAME}" artifacts/* \
               --repo "${GITHUB_REPOSITORY}" --clobber
           else
             gh release create "${GITHUB_REF_NAME}" artifacts/* \
               --repo "${GITHUB_REPOSITORY}" \
               --title "${GITHUB_REF_NAME}" \
-              --generate-notes
+              --notes-file release-notes.md
           fi
 
   # Rebuild the signed APT repo from all release .debs and deploy it to Pages.

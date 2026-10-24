@@ -204,6 +204,10 @@ of it — so the gate stays unforgeable even over plain HTTP.
   read-only.
 - Never commit the shared secret (`secret.key` is in `.gitignore`).
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 ## License
 
 [MIT](LICENSE) © 2026 Florian Taeger
