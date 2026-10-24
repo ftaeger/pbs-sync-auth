@@ -17,6 +17,15 @@ The section for a version is used as the text of its GitHub release.
 - Server image: dropped the redundant `v`-prefixed tag (`:vX.Y.Z`); use
   `:X.Y.Z`. Pre-release tags no longer move `:latest`.
 
+### Security
+- Release binaries, the client `.deb` and the server image now carry signed
+  build provenance attestations (`gh attestation verify`, see `SECURITY.md`).
+- CI: all GitHub Actions and the Go builder image are pinned to immutable
+  digests (kept current by Dependabot); workflow token permissions reduced to
+  the minimum per job; checkouts no longer persist credentials.
+- Added `SECURITY.md` (private vulnerability reporting) and an OpenSSF
+  Scorecard workflow.
+
 ## [1.0.0] - 2026-10-24
 
 First stable release. Upgrading is **strongly recommended**: all earlier
