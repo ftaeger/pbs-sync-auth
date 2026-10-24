@@ -1,6 +1,12 @@
 # Processed by the nginx image on startup: ${DOMAIN} is filled from the
 # environment (envsubst), while nginx runtime variables like $host stay intact.
 
+# Per-client-IP rate limit (http context: this template lands in conf.d/). A
+# source PBS needs 2 requests per check interval, so 1 r/s with a burst of 5
+# never affects legitimate clients.
+limit_req_zone $binary_remote_addr zone=pbsauth:1m rate=1r/s;
+limit_req_status 429;
+
 # Redirect plain HTTP to HTTPS.
 server {
     listen 80;
@@ -21,6 +27,13 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
 
     location / {
+        limit_req zone=pbsauth burst=5 nodelay;
+
+        # Optional allowlist (clients with fixed IPs):
+        # allow 203.0.113.10;
+        # allow 198.51.100.0/24;
+        # deny  all;
+
         proxy_pass http://pbs-sync-auth:8099;
         proxy_set_header Host              $host;
         proxy_set_header X-Real-IP         $remote_addr;

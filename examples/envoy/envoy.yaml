@@ -19,6 +19,9 @@ static_resources:
               typed_config:
                 "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
                 stat_prefix: ingress_https
+                # Append the real downstream address to X-Forwarded-For (and
+                # ignore client-supplied hops) so the auth server can log it.
+                use_remote_address: true
                 route_config:
                   virtual_hosts:
                     - name: pbs
@@ -27,6 +30,20 @@ static_resources:
                         - match: { prefix: "/" }
                           route: { cluster: pbs_auth }
                 http_filters:
+                  # Rate limit (token bucket for the whole listener, not per
+                  # client IP): 5 requests/s, burst 20, then 429.
+                  - name: envoy.filters.http.local_ratelimit
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.local_ratelimit.v3.LocalRateLimit
+                      stat_prefix: pbs_auth_ratelimit
+                      token_bucket:
+                        max_tokens: 20
+                        tokens_per_fill: 5
+                        fill_interval: 1s
+                      filter_enabled:
+                        default_value: { numerator: 100, denominator: HUNDRED }
+                      filter_enforced:
+                        default_value: { numerator: 100, denominator: HUNDRED }
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

@@ -14,7 +14,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"strconv"
 	"strings"
@@ -34,6 +36,11 @@ var (
 	// handful of source PBS needs only a few entries; PBS_MAX_PENDING overrides.
 	maxBodyBytes int64 = 4 << 10
 	maxPending         = 100
+
+	// Reverse proxies whose X-Forwarded-For / X-Real-IP headers are trusted for
+	// logging the real client address (PBS_TRUSTED_PROXIES). Empty = headers
+	// ignored, the TCP peer address is logged.
+	trustedProxies []netip.Prefix
 
 	// Optional target-PBS reachability gate. If targetURL is empty the feature is
 	// disabled and /auth/verify behaves as before (auth only).
@@ -68,6 +75,73 @@ func writeJSON(w http.ResponseWriter, code int, obj any) {
 	_ = json.NewEncoder(w).Encode(obj)
 }
 
+// parsePrefixes parses a comma-separated list of CIDRs or single IPs.
+func parsePrefixes(s string) ([]netip.Prefix, error) {
+	var out []netip.Prefix
+	for _, f := range strings.Split(s, ",") {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		if !strings.Contains(f, "/") {
+			a, err := netip.ParseAddr(f)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, netip.PrefixFrom(a, a.BitLen()))
+			continue
+		}
+		p, err := netip.ParsePrefix(f)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p.Masked())
+	}
+	return out, nil
+}
+
+func isTrusted(a netip.Addr) bool {
+	a = a.Unmap()
+	for _, p := range trustedProxies {
+		if p.Contains(a) {
+			return true
+		}
+	}
+	return false
+}
+
+// clientIP returns the address to log for a request. Forwarding headers are only
+// honored when the TCP peer is a trusted proxy; X-Forwarded-For is then walked
+// right to left and the first non-trusted hop is taken, so entries a client
+// prepends itself cannot spoof the result. X-Real-IP is the fallback.
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	peer, err := netip.ParseAddr(host)
+	if err != nil || !isTrusted(peer) {
+		return host
+	}
+	var hops []string
+	for _, v := range r.Header.Values("X-Forwarded-For") {
+		hops = append(hops, strings.Split(v, ",")...)
+	}
+	for i := len(hops) - 1; i >= 0; i-- {
+		a, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+		if err != nil {
+			break // garbage from an untrusted party: stop here
+		}
+		if !isTrusted(a) {
+			return a.Unmap().String()
+		}
+	}
+	if a, err := netip.ParseAddr(strings.TrimSpace(r.Header.Get("X-Real-IP"))); err == nil {
+		return a.Unmap().String()
+	}
+	return host
+}
+
 func gc() {
 	now := time.Now()
 	for k, v := range pending {
@@ -100,6 +174,7 @@ func challengeHandler(w http.ResponseWriter, r *http.Request) {
 	gc()
 	if len(pending) >= maxPending {
 		pendingMu.Unlock()
+		log.Printf("challenge from %s rejected: %d challenges pending (PBS_MAX_PENDING)", clientIP(r), maxPending)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "busy"})
 		return
 	}
@@ -134,11 +209,13 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	pendingMu.Unlock()
 	if !ok || entry.clientNonce != req.ClientNonce {
+		log.Printf("auth denied for %s: unknown or expired challenge", clientIP(r))
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "denied"})
 		return
 	}
 	expected := mac("client", req.ClientNonce, req.ServerNonce)
 	if !hmac.Equal([]byte(expected), []byte(req.ClientProof)) {
+		log.Printf("auth denied for %s: invalid client proof", clientIP(r))
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"status": "denied"})
 		return
 	}
@@ -147,6 +224,11 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 	status, message := verifyOutcome(targetURL, func() (bool, string) {
 		return targetReachable(targetURL, targetTimeout)
 	})
+	if message != "" {
+		log.Printf("auth ok for %s, %s", clientIP(r), message)
+	} else {
+		log.Printf("auth ok for %s", clientIP(r))
+	}
 	resp := map[string]string{"status": status}
 	if message != "" {
 		resp["message"] = message
@@ -232,6 +314,12 @@ func main() {
 	}
 	addr := env("PBS_AUTH_HOST", "0.0.0.0") + ":" + env("PBS_AUTH_PORT", "8099")
 	maxPending = positiveIntOr(os.Getenv("PBS_MAX_PENDING"), maxPending)
+	if trustedProxies, err = parsePrefixes(os.Getenv("PBS_TRUSTED_PROXIES")); err != nil {
+		log.Fatalf("PBS_TRUSTED_PROXIES: %v", err)
+	}
+	if len(trustedProxies) > 0 {
+		log.Printf("trusting forwarding headers from %v", trustedProxies)
+	}
 
 	// Optional target-PBS reachability gate.
 	targetURL = os.Getenv("PBS_TARGET_URL")

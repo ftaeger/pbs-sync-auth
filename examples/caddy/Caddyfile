@@ -4,5 +4,22 @@
 
 {$DOMAIN} {
 	tls /etc/caddy/certs/fullchain.pem /etc/caddy/certs/privkey.pem
+
+	# Optional allowlist (clients with fixed IPs):
+	# @denied not remote_ip 203.0.113.10 198.51.100.0/24
+	# respond @denied 403
+
+	# Rate limiting is not part of the standard Caddy image; it needs the
+	# caddy-ratelimit plugin (see README). With it, add a global block
+	# `{ order rate_limit before basic_auth }` at the top and uncomment:
+	# rate_limit {
+	# 	zone pbsauth {
+	# 		key    {remote_host}
+	# 		events 5
+	# 		window 5s
+	# 	}
+	# }
+
+	# Caddy sets X-Forwarded-For to the client IP by default.
 	reverse_proxy pbs-sync-auth:8099
 }

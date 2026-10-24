@@ -36,6 +36,10 @@ services:
       PBS_AUTH_HOST: "0.0.0.0"
       PBS_AUTH_PORT: "8099"
       PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+      # Trust the proxy's X-Forwarded-For so the server logs the real client IP.
+      # 172.16.0.0/12 covers Docker's default network pools; narrow it to this
+      # stack's subnet (docker network inspect) if your clients live in that range.
+      PBS_TRUSTED_PROXIES: "172.16.0.0/12"
     volumes:
       # Shared secret, mounted read-only. Identical to the client's secret.
       - ./secret.key:/run/secrets/pbs_auth_secret:ro

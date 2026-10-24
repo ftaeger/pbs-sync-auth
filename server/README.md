@@ -74,6 +74,22 @@ Build a multi-arch image with buildx:
     PBS_TARGET_TIMEOUT 3s      probe timeout for the gate
     PBS_MAX_PENDING    100     max outstanding challenges (each lives <= 30 s;
                                further /auth/challenge requests get 503)
+    PBS_TRUSTED_PROXIES (unset) comma-separated CIDRs/IPs of reverse proxies
+                               whose X-Forwarded-For is trusted for logging
+
+## Client IP behind a reverse proxy
+The server logs every auth result with the client address (`auth ok for …`,
+`auth denied for …: invalid client proof`). Behind a reverse proxy the TCP peer
+is the proxy, so set `PBS_TRUSTED_PROXIES` to the proxy's address or network
+(e.g. `172.16.0.0/12` for Docker's default pools, as in the
+[examples](../examples/)). Only if the peer is in that list does the server read
+`X-Forwarded-For`: it walks it from right to left and logs the first address
+that is not a trusted proxy, so hops a client prepends itself are ignored
+(`X-Real-IP` is the fallback). Unset → headers are ignored and the peer address
+is logged. The value is used for logging only, never for authentication.
+
+Keep the list as narrow as possible: if a real client's address is inside it,
+it is skipped as a "proxy" and a forged hop to its left could be logged instead.
 
 ## Target-PBS reachability gate (optional)
 If `PBS_TARGET_URL` is set, then after a client has authenticated the server

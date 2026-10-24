@@ -44,6 +44,10 @@ services:
       PBS_AUTH_HOST: "0.0.0.0"
       PBS_AUTH_PORT: "8099"
       PBS_AUTH_SECRET: /run/secrets/pbs_auth_secret
+      # Trust the proxy's X-Forwarded-For so the server logs the real client IP.
+      # 172.16.0.0/12 covers Docker's default network pools; narrow it to this
+      # stack's subnet (docker network inspect) if your clients live in that range.
+      PBS_TRUSTED_PROXIES: "172.16.0.0/12"
     volumes:
       # Shared secret, mounted read-only. Identical to the client's secret.
       - ./secret.key:/run/secrets/pbs_auth_secret:ro
@@ -55,5 +59,14 @@ services:
       - traefik.http.routers.pbsauth.rule=Host(`${DOMAIN}`)
       - traefik.http.routers.pbsauth.entrypoints=websecure
       - traefik.http.routers.pbsauth.tls.certresolver=le
+      # Per-client-IP rate limit: a source PBS needs 2 requests per check
+      # interval, so 1 req/s with a burst of 5 never affects legitimate clients.
+      - traefik.http.routers.pbsauth.middlewares=pbsauth-ratelimit
+      - traefik.http.middlewares.pbsauth-ratelimit.ratelimit.average=1
+      - traefik.http.middlewares.pbsauth-ratelimit.ratelimit.period=1s
+      - traefik.http.middlewares.pbsauth-ratelimit.ratelimit.burst=5
+      # Optional allowlist (clients with fixed IPs): uncomment and append
+      # ",pbsauth-allow" to the middlewares line above.
+      # - traefik.http.middlewares.pbsauth-allow.ipallowlist.sourcerange=203.0.113.10/32,198.51.100.0/24
       - traefik.http.services.pbsauth.loadbalancer.server.port=8099
       - traefik.http.services.pbsauth.loadbalancer.healthcheck.path=/healthz

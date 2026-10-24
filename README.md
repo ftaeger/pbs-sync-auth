@@ -183,6 +183,8 @@ Environment variables (see the component READMEs for defaults):
                             https://pbs-target.example.com:8007; unset = disabled)
     PBS_TARGET_TIMEOUT      server: probe timeout for the gate (default 3s)
     PBS_MAX_PENDING         server: max outstanding challenges (default 100)
+    PBS_TRUSTED_PROXIES     server: proxy CIDRs whose X-Forwarded-For is trusted
+                            for logging the client IP (unset = ignore headers)
 
 ## TLS (defense in depth)
 

@@ -228,3 +228,43 @@ func TestChallengePendingCap(t *testing.T) {
 		t.Fatalf("got %v, want [200 200 503]", codes)
 	}
 }
+
+func TestClientIP(t *testing.T) {
+	var err error
+	if trustedProxies, err = parsePrefixes("172.16.0.0/12, 10.0.0.1"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { trustedProxies = nil }()
+
+	cases := []struct {
+		name, remote, xff, realIP, want string
+	}{
+		{"untrusted peer ignores headers", "198.51.100.7:4000", "203.0.113.9", "", "198.51.100.7"},
+		{"trusted proxy, single hop", "172.18.0.2:4000", "203.0.113.9", "", "203.0.113.9"},
+		{"spoofed prefix is skipped", "172.18.0.2:4000", "1.2.3.4, 203.0.113.9", "", "203.0.113.9"},
+		{"chained trusted proxies", "172.18.0.2:4000", "203.0.113.9, 10.0.0.1", "", "203.0.113.9"},
+		{"LAN client behind proxy", "172.18.0.2:4000", "192.168.1.20", "", "192.168.1.20"},
+		{"X-Real-IP fallback", "172.18.0.2:4000", "", "203.0.113.9", "203.0.113.9"},
+		{"garbage XFF falls back to peer", "172.18.0.2:4000", "not-an-ip", "", "172.18.0.2"},
+		{"IPv6 client", "172.18.0.2:4000", "2001:db8::5", "", "2001:db8::5"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodPost, "/auth/verify", nil)
+			r.RemoteAddr = c.remote
+			if c.xff != "" {
+				r.Header.Set("X-Forwarded-For", c.xff)
+			}
+			if c.realIP != "" {
+				r.Header.Set("X-Real-IP", c.realIP)
+			}
+			if got := clientIP(r); got != c.want {
+				t.Fatalf("got %q, want %q", got, c.want)
+			}
+		})
+	}
+
+	if _, err := parsePrefixes("10.0.0.0/8,bogus"); err == nil {
+		t.Fatal("parsePrefixes: want error for invalid entry")
+	}
+}
