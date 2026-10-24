@@ -38,7 +38,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
   pbs-sync-auth:
-    image: ghcr.io/ftaeger/pbs-sync-auth:latest
+    image: ghcr.io/ftaeger/pbs-sync-auth:1
     restart: unless-stopped
     environment:
       PBS_AUTH_HOST: "0.0.0.0"

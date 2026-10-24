@@ -10,6 +10,13 @@ The section for a version is used as the text of its GitHub release.
 
 ## [Unreleased]
 
+### Changed
+- Server image: releases are now also tagged with the floating major tag
+  (`:1`), alongside `:X.Y.Z` and `:X.Y`, so you can pin a major line and still
+  receive patch and security updates. Docs and examples use `:1`.
+- Server image: dropped the redundant `v`-prefixed tag (`:vX.Y.Z`); use
+  `:X.Y.Z`. Pre-release tags no longer move `:latest`.
+
 ## [1.0.0] - 2026-10-24
 
 First stable release. Upgrading is **strongly recommended**: all earlier

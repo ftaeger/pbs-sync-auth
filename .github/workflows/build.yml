@@ -2,8 +2,11 @@ name: Build & Release
 
 # On every push to main: push a multi-arch server image to ghcr.io tagged
 # :latest and :sha-<short> (for testing).
-# On a vX.Y.Z tag: build the static binaries and the client .deb, publish a
-# versioned image, and cut a GitHub Release with the binaries + .deb attached.
+# On a vX.Y.Z tag: build the static binaries and the client .deb, publish the
+# image as :X.Y.Z (immutable), :X.Y and :X (floating, so users can pin a
+# major/minor line and still get patch releases) and :latest, and cut a GitHub
+# Release with the binaries + .deb attached. Pre-release tags (vX.Y.Z-rc1) only
+# get :X.Y.Z-rc1.
 # Binaries/.deb/release are gated to tags so merging a release PR and then
 # tagging the same commit does not rebuild them twice.
 on:
@@ -85,10 +88,10 @@ jobs:
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix=sha-,enable={{is_default_branch}}
-            type=ref,event=tag
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') }}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, '-') }}
       - uses: docker/build-push-action@v7
         with:
           context: server
