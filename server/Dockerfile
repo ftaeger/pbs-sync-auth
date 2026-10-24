@@ -3,7 +3,7 @@
 # architecture ($TARGETOS/$TARGETARCH are provided by buildx). Because the Go
 # toolchain cross-compiles, multi-arch images build fast without QEMU emulating
 # the compiler.
-FROM --platform=$BUILDPLATFORM golang:1.23-alpine AS build
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS build
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /src

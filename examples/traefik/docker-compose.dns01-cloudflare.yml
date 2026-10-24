@@ -14,7 +14,7 @@
 
 services:
   traefik:
-    image: traefik:v3.3
+    image: traefik:v3.7
     restart: unless-stopped
     environment:
       CF_DNS_API_TOKEN: ${CF_DNS_API_TOKEN}

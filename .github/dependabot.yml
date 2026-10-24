@@ -1,0 +1,14 @@
+# Keep the toolchain-related pins from drifting: the Go modules are stdlib-only,
+# so the relevant "dependencies" are the go directive, the builder image and the
+# GitHub Actions versions.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories: [/client, /server]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /server
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }

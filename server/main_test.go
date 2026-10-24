@@ -185,3 +185,38 @@ func TestVerifyHandler(t *testing.T) {
 
 	targetURL = "" // reset shared state
 }
+
+func TestChallengeBodyLimit(t *testing.T) {
+	big := `{"client_nonce":"` + strings.Repeat("a", int(maxBodyBytes)) + `"}`
+	rr := httptest.NewRecorder()
+	challengeHandler(rr, httptest.NewRequest(http.MethodPost, "/auth/challenge", strings.NewReader(big)))
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("oversized body: got %d, want 400", rr.Code)
+	}
+}
+
+func TestChallengePendingCap(t *testing.T) {
+	secret = []byte("test-secret-key")
+	old := maxPending
+	maxPending = 2
+	defer func() {
+		maxPending = old
+		pendingMu.Lock()
+		pending = map[string]pendingEntry{}
+		pendingMu.Unlock()
+	}()
+	pendingMu.Lock()
+	pending = map[string]pendingEntry{}
+	pendingMu.Unlock()
+
+	codes := make([]int, 3)
+	for i := range codes {
+		body, _ := json.Marshal(map[string]string{"client_nonce": randHex(16)})
+		rr := httptest.NewRecorder()
+		challengeHandler(rr, httptest.NewRequest(http.MethodPost, "/auth/challenge", bytes.NewReader(body)))
+		codes[i] = rr.Code
+	}
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK || codes[2] != http.StatusServiceUnavailable {
+		t.Fatalf("got %v, want [200 200 503]", codes)
+	}
+}

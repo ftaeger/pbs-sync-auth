@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -63,7 +64,16 @@ func parseDurationOr(s string, def time.Duration) time.Duration {
 	return def
 }
 
+// maxResponseBytes caps auth-server responses. The challenge response is decoded
+// before server_proof is checked, so an unverified peer must not be able to make
+// the client buffer arbitrary amounts of data.
+const maxResponseBytes = 64 << 10
+
 func loadSecret(path string) ([]byte, error) {
+	if fi, err := os.Stat(path); err == nil && fi.Mode().Perm()&0o077 != 0 {
+		log.Printf("warning: %s is accessible by group/others (mode %04o); run: chmod 600 %s",
+			path, fi.Mode().Perm(), path)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -113,7 +123,7 @@ func post(client *http.Client, url string, payload any, out any) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("http %d", resp.StatusCode)
 	}
-	return json.NewDecoder(resp.Body).Decode(out)
+	return json.NewDecoder(io.LimitReader(resp.Body, maxResponseBytes)).Decode(out)
 }
 
 // authenticate performs the mutual HMAC round. A returned error means the server

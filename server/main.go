@@ -27,6 +27,12 @@ var (
 	pendingMu    sync.Mutex
 	challengeTTL = 30 * time.Second
 
+	// Abuse limits: /auth/challenge is unauthenticated, so cap both the request
+	// body and the number of outstanding challenges (memory is bounded even under
+	// a flood; legitimate clients need one entry per 30 s).
+	maxBodyBytes int64 = 4 << 10
+	maxPending         = 10000
+
 	// Optional target-PBS reachability gate. If targetURL is empty the feature is
 	// disabled and /auth/verify behaves as before (auth only).
 	targetURL     string
@@ -77,6 +83,7 @@ func challengeHandler(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ClientNonce string `json:"client_nonce"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
 		return
@@ -89,6 +96,11 @@ func challengeHandler(w http.ResponseWriter, r *http.Request) {
 	sn := randHex(16)
 	pendingMu.Lock()
 	gc()
+	if len(pending) >= maxPending {
+		pendingMu.Unlock()
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "busy"})
+		return
+	}
 	pending[sn] = pendingEntry{clientNonce: cn, expiry: time.Now().Add(challengeTTL)}
 	pendingMu.Unlock()
 	writeJSON(w, http.StatusOK, map[string]string{
@@ -107,6 +119,7 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 		ServerNonce string `json:"server_nonce"`
 		ClientProof string `json:"client_proof"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
 		return
@@ -143,12 +156,15 @@ func verifyHandler(w http.ResponseWriter, r *http.Request) {
 // <base>/api2/json/version with certificate verification disabled (PBS is
 // self-signed; this only checks that the API answers — the real push transfer is
 // separately fingerprint-pinned). Any HTTP response with status < 500 counts as
-// reachable (401 without a token still proves the API is alive).
+// reachable (401 without a token still proves the API is alive). Keep-alives are
+// disabled because the transport is per-call: pooled idle connections would
+// otherwise never be closed and leak one TLS connection per probe.
 func targetReachable(base string, timeout time.Duration) (bool, string) {
 	client := &http.Client{
 		Timeout: timeout,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, //nolint:gosec // liveness probe only
+			TLSClientConfig:   &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12}, //nolint:gosec // liveness probe only
+			DisableKeepAlives: true,
 		},
 	}
 	resp, err := client.Get(strings.TrimRight(base, "/") + "/api2/json/version")
@@ -220,11 +236,13 @@ func main() {
 	mux.HandleFunc("/auth/verify", verifyHandler)
 	mux.HandleFunc("/healthz", healthHandler)
 
+	// /auth/verify may wait for the target probe, so the write deadline must
+	// outlast PBS_TARGET_TIMEOUT or a slow probe would cut the response.
 	srv := &http.Server{
 		Addr:              addr,
 		Handler:           mux,
 		ReadTimeout:       5 * time.Second,
-		WriteTimeout:      5 * time.Second,
+		WriteTimeout:      targetTimeout + 5*time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 	log.Printf("pbs-auth-server listening on %s", addr)
