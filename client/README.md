@@ -54,11 +54,11 @@ Without Docker, using a local Go toolchain:
 ### Option A — APT repository (recommended for PBS 4.x)
 Add the signed APT repo once; `apt upgrade` then keeps the client up to date.
 
-    curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
+    curl -fsSL https://apt.pbs-sync-auth.com/pubkey.asc \
       | gpg --dearmor > /usr/share/keyrings/pbs-sync-auth.gpg
 
     echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
-      https://ftaeger.github.io/pbs-sync-auth stable main" \
+      https://apt.pbs-sync-auth.com stable main" \
       > /etc/apt/sources.list.d/pbs-sync-auth.list
 
     apt update && apt install pbs-sync-auth-client

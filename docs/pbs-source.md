@@ -60,10 +60,10 @@ The job ID `offsite-push` must match `PBS_SYNC_JOB` in the auth client.
 Recommended: add the signed APT repo and install (a PBS runs as root, so no
 `sudo`) — full details in [`../client/README.md`](../client/README.md):
 
-    curl -fsSL https://ftaeger.github.io/pbs-sync-auth/pubkey.asc \
+    curl -fsSL https://apt.pbs-sync-auth.com/pubkey.asc \
       | gpg --dearmor > /usr/share/keyrings/pbs-sync-auth.gpg
     echo "deb [signed-by=/usr/share/keyrings/pbs-sync-auth.gpg] \
-      https://ftaeger.github.io/pbs-sync-auth stable main" \
+      https://apt.pbs-sync-auth.com stable main" \
       > /etc/apt/sources.list.d/pbs-sync-auth.list
     apt update && apt install pbs-sync-auth-client
 
