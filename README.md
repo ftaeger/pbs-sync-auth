@@ -182,6 +182,7 @@ Environment variables (see the component READMEs for defaults):
     PBS_TARGET_URL          server: optional target-PBS reachability gate (e.g.
                             https://pbs-target.example.com:8007; unset = disabled)
     PBS_TARGET_TIMEOUT      server: probe timeout for the gate (default 3s)
+    PBS_MAX_PENDING         server: max outstanding challenges (default 100)
 
 ## TLS (defense in depth)
 

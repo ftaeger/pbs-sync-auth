@@ -16,6 +16,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,9 +30,10 @@ var (
 
 	// Abuse limits: /auth/challenge is unauthenticated, so cap both the request
 	// body and the number of outstanding challenges (memory is bounded even under
-	// a flood; legitimate clients need one entry per 30 s).
+	// a flood). Each client holds one challenge for at most challengeTTL, so a
+	// handful of source PBS needs only a few entries; PBS_MAX_PENDING overrides.
 	maxBodyBytes int64 = 4 << 10
-	maxPending         = 10000
+	maxPending         = 100
 
 	// Optional target-PBS reachability gate. If targetURL is empty the feature is
 	// disabled and /auth/verify behaves as before (auth only).
@@ -207,6 +209,14 @@ func loadSecret(path string) ([]byte, error) {
 	return hex.DecodeString(strings.TrimSpace(string(data)))
 }
 
+// positiveIntOr parses s as an integer > 0, falling back to def otherwise.
+func positiveIntOr(s string, def int) int {
+	if n, err := strconv.Atoi(s); err == nil && n > 0 {
+		return n
+	}
+	return def
+}
+
 func env(k, def string) string {
 	if v := os.Getenv(k); v != "" {
 		return v
@@ -221,6 +231,7 @@ func main() {
 		log.Fatalf("loading secret failed: %v", err)
 	}
 	addr := env("PBS_AUTH_HOST", "0.0.0.0") + ":" + env("PBS_AUTH_PORT", "8099")
+	maxPending = positiveIntOr(os.Getenv("PBS_MAX_PENDING"), maxPending)
 
 	// Optional target-PBS reachability gate.
 	targetURL = os.Getenv("PBS_TARGET_URL")
@@ -245,6 +256,6 @@ func main() {
 		WriteTimeout:      targetTimeout + 5*time.Second,
 		ReadHeaderTimeout: 3 * time.Second,
 	}
-	log.Printf("pbs-auth-server listening on %s", addr)
+	log.Printf("pbs-auth-server listening on %s (max %d pending challenges)", addr, maxPending)
 	log.Fatal(srv.ListenAndServe())
 }

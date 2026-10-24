@@ -195,6 +195,14 @@ func TestChallengeBodyLimit(t *testing.T) {
 	}
 }
 
+func TestPositiveIntOr(t *testing.T) {
+	for in, want := range map[string]int{"": 100, "abc": 100, "0": 100, "-5": 100, "1000": 1000} {
+		if got := positiveIntOr(in, 100); got != want {
+			t.Errorf("positiveIntOr(%q) = %d, want %d", in, got, want)
+		}
+	}
+}
+
 func TestChallengePendingCap(t *testing.T) {
 	secret = []byte("test-secret-key")
 	old := maxPending

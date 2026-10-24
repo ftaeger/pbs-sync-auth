@@ -72,6 +72,8 @@ Build a multi-arch image with buildx:
     PBS_TARGET_URL     (unset) optional target-PBS reachability gate, e.g.
                        https://pbs-target.example.com:8007
     PBS_TARGET_TIMEOUT 3s      probe timeout for the gate
+    PBS_MAX_PENDING    100     max outstanding challenges (each lives <= 30 s;
+                               further /auth/challenge requests get 503)
 
 ## Target-PBS reachability gate (optional)
 If `PBS_TARGET_URL` is set, then after a client has authenticated the server
